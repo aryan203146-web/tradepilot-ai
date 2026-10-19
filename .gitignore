@@ -1,0 +1,35 @@
+# ================================================================
+# TradePilot AI — Security & Environment Git Ignore
+# ================================================================
+
+# ⚠️ CRITICAL SECURITY: Never commit broker credentials or tokens!
+data/groww_credentials.json
+data/*.json
+*.env
+.env
+.env.*
+!.env.example
+
+# Local data & logs
+data/
+logs/
+*.log
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE settings
+.vscode/
+.idea/

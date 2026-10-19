@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradePilot AI — F&O Intraday Dashboard</title>
+  <link rel="stylesheet" href="/static/css/dashboard.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <span class="logo-text">TradePilot <span class="logo-ai">AI</span></span>
+      </div>
+      <div id="groww-status-badge" class="mode-badge" style="background:rgba(0,210,144,0.1);color:#00d290;border:1px solid rgba(0,210,144,0.3);cursor:pointer;" onclick="openGrowwModal()">
+        🔌 Connect Groww API
+      </div>
+      <div class="mode-badge paper">📄 PAPER TRADING</div>
+    </div>
+    <div class="header-center">
+      <div class="market-clock">
+        <span id="clock-time" class="clock-time">--:--:--</span>
+        <span id="clock-date" class="clock-date">---</span>
+        <span id="market-status-badge" class="market-badge closed">CLOSED</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="portfolio-mini">
+        <span class="pm-label">P&L Today</span>
+        <span id="header-pnl" class="pm-value neutral">₹0</span>
+      </div>
+      <button class="btn-scan" id="btn-scan" onclick="runScan()">
+        <span class="btn-icon">🔍</span> Scan Markets
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <main class="main-layout">
+
+    <!-- Sidebar: Risk & Portfolio -->
+    <aside class="sidebar">
+      <div class="card risk-card">
+        <h3 class="card-title">⚠️ Risk Monitor</h3>
+        <div class="risk-grid">
+          <div class="risk-item">
+            <span class="ri-label">Capital</span>
+            <span id="rm-capital" class="ri-value">₹5,00,000</span>
+          </div>
+          <div class="risk-item">
+            <span class="ri-label">Trades Today</span>
+            <span id="rm-trades" class="ri-value">0 / 4</span>
+          </div>
+          <div class="risk-item">
+            <span class="ri-label">Today P&L</span>
+            <span id="rm-daily-pnl" class="ri-value neutral">₹0</span>
+          </div>
+          <div class="risk-item">
+            <span class="ri-label">Daily Loss Limit</span>
+            <span id="rm-daily-limit" class="ri-value warning">-3%</span>
+          </div>
+          <div class="risk-item">
+            <span class="ri-label">Capital at Risk</span>
+            <span id="rm-risk" class="ri-value">0%</span>
+          </div>
+          <div class="risk-item">
+            <span class="ri-label">Open Positions</span>
+            <span id="rm-open" class="ri-value">0</span>
+          </div>
+        </div>
+        <div class="risk-bar-container">
+          <div class="risk-bar-label">Daily Loss Used</div>
+          <div class="risk-bar">
+            <div id="risk-bar-fill" class="risk-bar-fill" style="width: 0%"></div>
+          </div>
+          <div id="risk-bar-pct" class="risk-bar-pct">0%</div>
+        </div>
+      </div>
+
+      <div class="card portfolio-card">
+        <h3 class="card-title">📊 Portfolio</h3>
+        <div class="portfolio-stats">
+          <div class="ps-item">
+            <span class="ps-label">Total P&L</span>
+            <span id="port-total-pnl" class="ps-value neutral">₹0.00</span>
+          </div>
+          <div class="ps-item">
+            <span class="ps-label">Unrealized</span>
+            <span id="port-unrealized" class="ps-value neutral">₹0.00</span>
+          </div>
+          <div class="ps-item">
+            <span class="ps-label">Win Rate</span>
+            <span id="port-winrate" class="ps-value">--%</span>
+          </div>
+          <div class="ps-item">
+            <span class="ps-label">Total Trades</span>
+            <span id="port-total-trades" class="ps-value">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card config-card">
+        <h3 class="card-title">⚙️ Scan Settings</h3>
+        <div class="settings-grid">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <label class="setting-label">Symbols</label>
+            <div style="display:flex;gap:4px;">
+              <button type="button" class="btn-sm" style="padding:2px 6px;font-size:10px;" onclick="selectAllSymbols(true)">All</button>
+              <button type="button" class="btn-sm" style="padding:2px 6px;font-size:10px;" onclick="selectIndicesOnly()">Index</button>
+              <button type="button" class="btn-sm" style="padding:2px 6px;font-size:10px;" onclick="selectAllSymbols(false)">Clear</button>
+            </div>
+          </div>
+          <div class="symbol-checkboxes">
+            <label class="checkbox-label"><input type="checkbox" value="NIFTY" checked class="sym-check"> NIFTY</label>
+            <label class="checkbox-label"><input type="checkbox" value="BANKNIFTY" checked class="sym-check"> BANKNIFTY</label>
+            <label class="checkbox-label"><input type="checkbox" value="FINNIFTY" checked class="sym-check"> FINNIFTY</label>
+            <label class="checkbox-label"><input type="checkbox" value="RELIANCE" checked class="sym-check"> RELIANCE</label>
+            <label class="checkbox-label"><input type="checkbox" value="HDFCBANK" checked class="sym-check"> HDFCBANK</label>
+            <label class="checkbox-label"><input type="checkbox" value="ICICIBANK" checked class="sym-check"> ICICIBANK</label>
+            <label class="checkbox-label"><input type="checkbox" value="SBIN" checked class="sym-check"> SBIN</label>
+            <label class="checkbox-label"><input type="checkbox" value="TCS" checked class="sym-check"> TCS</label>
+            <label class="checkbox-label"><input type="checkbox" value="INFY" checked class="sym-check"> INFY</label>
+            <label class="checkbox-label"><input type="checkbox" value="AXISBANK" checked class="sym-check"> AXISBANK</label>
+            <label class="checkbox-label"><input type="checkbox" value="WIPRO" class="sym-check"> WIPRO</label>
+            <label class="checkbox-label"><input type="checkbox" value="LT" class="sym-check"> LT</label>
+          </div>
+          <label class="setting-label">Auto Refresh</label>
+          <select id="auto-refresh-interval" class="setting-select">
+            <option value="0">Disabled</option>
+            <option value="60">Every 1 min</option>
+            <option value="300" selected>Every 5 min</option>
+            <option value="900">Every 15 min</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main content -->
+    <div class="content">
+
+      <!-- System banner -->
+      <div class="system-banner" id="system-banner">
+        <span class="sb-icon">📄</span>
+        <strong>PAPER TRADING MODE ACTIVE</strong> — Real money execution is disabled.
+        All trades are simulated for strategy testing and validation.
+      </div>
+
+      <!-- Scan status bar -->
+      <div class="scan-status" id="scan-status">
+        <span id="scan-status-text">Click "Scan Markets" to generate trade signals</span>
+        <span id="scan-loading" class="loading-spinner hidden"></span>
+      </div>
+
+      <!-- Signal Cards -->
+      <section class="signals-section">
+        <div class="section-header">
+          <h2 class="section-title">🎯 Trade Signals</h2>
+          <span class="section-subtitle" id="signals-count">No signals yet</span>
+        </div>
+        <div id="signals-container" class="signals-grid">
+          <div class="no-signal-placeholder">
+            <div class="nsp-icon">📊</div>
+            <div class="nsp-text">Run market scan to generate signals</div>
+            <div class="nsp-sub">Signals appear here after validation</div>
+          </div>
+        </div>
+      <!-- Trade Validation & Verification Inspector -->
+      <section class="validator-section">
+        <div class="section-header">
+          <h2 class="section-title">🔎 Trade Validation & Verification Inspector</h2>
+          <span class="section-subtitle">Audit any symbol's live indicators and rule pass/fail scorecard</span>
+        </div>
+        <div class="card" style="padding:16px;">
+          <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+            <label style="font-weight:600;font-size:13px;">Select Symbol:</label>
+            <select id="validator-symbol-select" class="setting-select" style="width:160px;">
+              <option value="NIFTY">NIFTY 50</option>
+              <option value="BANKNIFTY" selected>BANK NIFTY</option>
+              <option value="FINNIFTY">FINNIFTY</option>
+              <option value="RELIANCE">RELIANCE</option>
+              <option value="HDFCBANK">HDFCBANK</option>
+              <option value="ICICIBANK">ICICIBANK</option>
+              <option value="SBIN">SBIN</option>
+              <option value="TCS">TCS</option>
+              <option value="INFY">INFY</option>
+              <option value="AXISBANK">AXISBANK</option>
+              <option value="WIPRO">WIPRO</option>
+              <option value="LT">LT</option>
+            </select>
+            <button class="btn-sm" style="padding:7px 14px;font-weight:600;background:var(--accent);color:#fff;" onclick="inspectSymbolValidation()">
+              🔍 Inspect & Verify Setup
+            </button>
+            <span id="validator-loading" class="loading-spinner hidden"></span>
+          </div>
+          <div id="validator-output">
+            <div style="font-size:13px;color:var(--text-muted);text-align:center;padding:20px;">
+              Select any symbol above and click <strong>"Inspect & Verify Setup"</strong> to see its complete mathematical pass/fail scorecard.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Market Data Grid -->
+      <section class="market-section">
+        <div class="section-header">
+          <h2 class="section-title">📈 Market Overview</h2>
+        </div>
+        <div id="market-grid" class="market-grid">
+          <!-- Populated by JS -->
+        </div>
+      </section>
+
+      <!-- Open Trades -->
+      <section class="trades-section">
+        <div class="section-header">
+          <h2 class="section-title">📋 Open Paper Trades</h2>
+          <button class="btn-sm" onclick="loadOpenTrades()">Refresh</button>
+        </div>
+        <div id="open-trades-container">
+          <div class="empty-state">No open paper trades</div>
+        </div>
+      </section>
+
+      <!-- Trade History -->
+      <section class="trades-section">
+        <div class="section-header">
+          <h2 class="section-title">📜 Trade History</h2>
+          <button class="btn-sm" onclick="loadTradeHistory()">Load History</button>
+        </div>
+        <div id="trade-history-container">
+          <div class="empty-state">No trade history yet</div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Signal Detail Modal -->
+  <div id="signal-modal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeModal()"></div>
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title">Signal Details</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn-execute" id="btn-execute-trade" onclick="executeTrade()">
+          📄 Execute Paper Trade
+        </button>
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Groww Broker Connection Modal -->
+  <div id="groww-modal" class="modal hidden">
+    <div class="modal-overlay" onclick="closeGrowwModal()"></div>
+    <div class="modal-box" style="max-width:520px;">
+      <div class="modal-header">
+        <h3>🔌 Connect Groww Trading API</h3>
+        <button class="modal-close" onclick="closeGrowwModal()">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex;flex-direction:column;gap:14px;">
+        <p style="font-size:13px;color:var(--text-secondary);line-height:1.5;">
+          Connect your Groww Trading API to stream <strong>100% real live market option chain LTP</strong> and execute trades directly.
+        </p>
+        <div style="background:var(--bg-secondary);padding:10px 14px;border-radius:8px;font-size:12px;color:var(--text-muted);">
+          📍 <strong>How to get credentials:</strong><br/>
+          1. Visit <strong>groww.in/trade-api</strong> or Profile &gt; Settings &gt; <em>Trading APIs</em>.<br/>
+          2. Click <em>Generate API Key</em> and choose <em>API Key & Secret Flow</em>.<br/>
+          3. Copy your API Key and Secret below.
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;font-weight:600;">Groww API Key *</label>
+          <input id="groww-api-key" type="password" placeholder="Enter Groww API Key" style="width:100%;padding:9px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-family:var(--font-mono);font-size:13px;" />
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px;font-weight:600;">Groww API Secret (or TOTP Key) *</label>
+          <input id="groww-api-secret" type="password" placeholder="Enter API Secret or 2FA TOTP Secret" style="width:100%;padding:9px 12px;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-family:var(--font-mono);font-size:13px;" />
+        </div>
+        <div id="groww-connect-msg" style="font-size:12px;padding:8px;border-radius:6px;display:none;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-execute" id="btn-save-groww" onclick="saveGrowwCredentials()">
+          Save & Connect
+        </button>
+        <button class="btn-cancel" onclick="closeGrowwModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
