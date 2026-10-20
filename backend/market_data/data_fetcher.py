@@ -152,6 +152,17 @@ def fetch_market_data(symbol: str) -> Dict:
     if df_5m is not None and len(df_5m) > 0:
         spot_price = float(df_5m['Close'].iloc[-1])
 
+    # If Upstox live feed is connected, prioritize real exchange LTP
+    try:
+        from market_data.upstox_feed import upstox_manager
+        if upstox_manager.is_connected:
+            live_quotes = upstox_manager.get_live_ltp([symbol])
+            if symbol in live_quotes and live_quotes[symbol] > 0:
+                spot_price = live_quotes[symbol]
+                logger.info(f"Using live Upstox LTP for {symbol}: ₹{spot_price}")
+    except Exception as e:
+        logger.debug(f"Upstox LTP lookup bypassed: {e}")
+
     return {
         'symbol': symbol,
         'yf_symbol': yf_sym,
@@ -232,9 +243,22 @@ def black_scholes_pricing(S: float, K: float, T: float, r: float, sigma: float, 
 
 def get_options_chain_mock(symbol: str, spot_price: float, strike_gap: int) -> Dict:
     """
-    Generate market-accurate options chain using Black-Scholes formula,
-    live India VIX, and true Days-To-Expiry (DTE) for Indian F&O contracts.
+    Generate options chain data for paper trading.
+    If Upstox API v2 is connected, uses 100% REAL live market option chain!
+    Otherwise falls back to calibrated Black-Scholes model.
     """
+    try:
+        from market_data.upstox_feed import upstox_manager
+        if upstox_manager.is_connected:
+            live_chain = upstox_manager.get_live_option_chain(symbol)
+            if live_chain and live_chain.get('calls') and live_chain.get('puts'):
+                logger.info(f"Using 100% REAL live Upstox option chain for {symbol}")
+                live_chain['vix'] = round(get_live_vix(), 2)
+                live_chain['dte_days'] = 7.0
+                return live_chain
+    except Exception as e:
+        logger.warning(f"Upstox option chain lookup fallback: {e}")
+
     import pytz
     IST = pytz.timezone("Asia/Kolkata")
     now = datetime.now(IST)

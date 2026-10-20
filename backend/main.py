@@ -100,7 +100,12 @@ class GrowwConnectRequest(BaseModel):
     totp_secret: Optional[str] = None
 
 
+class UpstoxConnectRequest(BaseModel):
+    access_token: str
+
+
 from market_data.groww_feed import groww_manager
+from market_data.upstox_feed import upstox_manager
 
 
 # ================================================================
@@ -154,6 +159,23 @@ async def connect_groww(req: GrowwConnectRequest):
         "success": success,
         "message": msg,
         "status": groww_manager.get_status()
+    }
+
+
+@app.get("/api/upstox/status")
+async def get_upstox_status():
+    """Get live Upstox API v2 connection status."""
+    return upstox_manager.get_status()
+
+
+@app.post("/api/upstox/connect")
+async def connect_upstox(req: UpstoxConnectRequest):
+    """Authenticate and connect to live Upstox API v2."""
+    success, msg = upstox_manager.connect(req.access_token)
+    return {
+        "success": success,
+        "message": msg,
+        "status": upstox_manager.get_status()
     }
 
 

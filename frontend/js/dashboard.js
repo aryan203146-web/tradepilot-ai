@@ -906,6 +906,93 @@ async function saveGrowwCredentials() {
 }
 
 // ================================================================
+// Upstox API v2 Live Feed Connection
+// ================================================================
+
+function openUpstoxModal() {
+  document.getElementById('upstox-modal').classList.remove('hidden');
+}
+
+function closeUpstoxModal() {
+  document.getElementById('upstox-modal').classList.add('hidden');
+}
+
+async function checkUpstoxStatus() {
+  try {
+    const resp = await fetch(`${API_BASE}/api/upstox/status`);
+    const data = await resp.json();
+    const badge = document.getElementById('upstox-status-badge');
+    if (badge) {
+      if (data.is_connected) {
+        badge.innerHTML = `🟢 UPSTOX LIVE`;
+        badge.style.background = 'rgba(88,101,242,0.25)';
+        badge.style.color = '#7289da';
+        badge.style.borderColor = '#7289da';
+        badge.title = 'Upstox v2 API Active — Streaming 100% Real Live Market Quotes';
+      } else {
+        badge.innerHTML = '⚡ Connect Upstox API';
+        badge.style.background = 'rgba(88,101,242,0.15)';
+        badge.style.color = '#7289da';
+        badge.style.borderColor = 'rgba(88,101,242,0.3)';
+        badge.title = 'Click to connect Upstox for live market quotes';
+      }
+    }
+  } catch (err) {
+    console.error('Upstox status check failed:', err);
+  }
+}
+
+async function saveUpstoxCredentials() {
+  const token = document.getElementById('upstox-access-token').value.trim();
+  const msgEl = document.getElementById('upstox-connect-msg');
+  const btn = document.getElementById('btn-save-upstox');
+
+  if (!token) {
+    msgEl.style.display = 'block';
+    msgEl.style.background = 'rgba(255,77,109,0.15)';
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = 'Please enter your Upstox Access Token';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Connecting to Upstox...';
+  msgEl.style.display = 'none';
+
+  try {
+    const resp = await fetch(`${API_BASE}/api/upstox/connect`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ access_token: token }),
+    });
+
+    const data = await resp.json();
+    msgEl.style.display = 'block';
+    if (data.success) {
+      msgEl.style.background = 'rgba(0,200,150,0.15)';
+      msgEl.style.color = 'var(--green)';
+      msgEl.textContent = '✅ Connected to Upstox API v2 successfully!';
+      showSuccess('Upstox API connected! Real live market quotes and option chains active.');
+      await checkUpstoxStatus();
+      setTimeout(closeUpstoxModal, 1500);
+      runScan();
+    } else {
+      msgEl.style.background = 'rgba(255,77,109,0.15)';
+      msgEl.style.color = 'var(--red)';
+      msgEl.textContent = `❌ ${data.message || 'Connection failed. Verify your access token.'}`;
+    }
+  } catch (err) {
+    msgEl.style.display = 'block';
+    msgEl.style.background = 'rgba(255,77,109,0.15)';
+    msgEl.style.color = 'var(--red)';
+    msgEl.textContent = `Error: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save & Connect Upstox';
+  }
+}
+
+// ================================================================
 // Init
 // ================================================================
 
@@ -913,6 +1000,7 @@ document.addEventListener('DOMContentLoaded', () => {
   updateClock();
   setInterval(updateClock, 1000);
   loadPortfolio();
+  checkUpstoxStatus();
   checkGrowwStatus();
   setupAutoRefresh();
 
@@ -925,6 +1013,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Escape') {
       closeModal();
       closeGrowwModal();
+      closeUpstoxModal();
     }
   });
 });
