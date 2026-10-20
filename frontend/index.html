@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TradePilot AI — F&O Intraday Dashboard</title>
+  <title>TradePilot AI — Quantitative Intraday F&O Cockpit</title>
   <link rel="stylesheet" href="/static/css/dashboard.css" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
   <!-- Header -->
   <header class="header">
     <div class="header-left">
-      <div class="logo">
+      <div class="logo" onclick="runScan()" title="Click to refresh market scan">
         <span class="logo-icon">⚡</span>
         <span class="logo-text">TradePilot <span class="logo-ai">AI</span></span>
       </div>
@@ -21,7 +21,7 @@
       <div id="groww-status-badge" class="mode-badge" style="background:rgba(0,210,144,0.1);color:#00d290;border:1px solid rgba(0,210,144,0.3);cursor:pointer;" onclick="openGrowwModal()">
         🔌 Groww API
       </div>
-      <div class="mode-badge paper">📄 PAPER TRADING</div>
+      <div class="mode-badge paper">📄 PAPER SIMULATOR</div>
     </div>
     <div class="header-center">
       <div class="market-clock">
@@ -32,14 +32,26 @@
     </div>
     <div class="header-right">
       <div class="portfolio-mini">
-        <span class="pm-label">P&L Today</span>
-        <span id="header-pnl" class="pm-value neutral">₹0</span>
+        <span class="pm-label">Today P&L</span>
+        <span id="header-pnl" class="pm-value neutral">₹0.00</span>
       </div>
       <button class="btn-scan" id="btn-scan" onclick="runScan()">
-        <span class="btn-icon">🔍</span> Scan Markets
+        <span class="btn-icon">🔍</span> Scan Markets <small style="opacity:0.75;font-weight:400;font-size:11px;">(Ctrl+S)</small>
       </button>
     </div>
   </header>
+
+  <!-- Live Market Ticker Tape -->
+  <div class="ticker-strip" id="ticker-strip">
+    <div class="ticker-item"><span class="ticker-name">NIFTY 50</span> <span class="ticker-price" id="tick-nifty">22,888.95</span> <span class="ticker-chg up" id="tick-nifty-chg">+0.07%</span></div>
+    <div class="ticker-item"><span class="ticker-name">BANK NIFTY</span> <span class="ticker-price" id="tick-banknifty">55,488.10</span> <span class="ticker-chg up" id="tick-banknifty-chg">+0.01%</span></div>
+    <div class="ticker-item"><span class="ticker-name">FINNIFTY</span> <span class="ticker-price" id="tick-finnifty">24,987.10</span> <span class="ticker-chg up" id="tick-finnifty-chg">+0.01%</span></div>
+    <div class="ticker-item"><span class="ticker-name">RELIANCE</span> <span class="ticker-price" id="tick-reliance">1,280.40</span> <span class="ticker-chg up" id="tick-reliance-chg">+0.15%</span></div>
+    <div class="ticker-item"><span class="ticker-name">HDFCBANK</span> <span class="ticker-price" id="tick-hdfcbank">1,682.20</span> <span class="ticker-chg down" id="tick-hdfcbank-chg">-0.10%</span></div>
+    <div class="ticker-item"><span class="ticker-name">ICICIBANK</span> <span class="ticker-price" id="tick-icicibank">1,241.50</span> <span class="ticker-chg up" id="tick-icicibank-chg">+0.22%</span></div>
+    <div class="ticker-item"><span class="ticker-name">TCS</span> <span class="ticker-price" id="tick-tcs">3,810.00</span> <span class="ticker-chg down" id="tick-tcs-chg">-0.05%</span></div>
+    <div class="ticker-item"><span class="ticker-name">INFY</span> <span class="ticker-price" id="tick-infy">1,782.30</span> <span class="ticker-chg up" id="tick-infy-chg">+0.30%</span></div>
+  </div>
 
   <!-- Main Layout -->
   <main class="main-layout">
@@ -47,47 +59,49 @@
     <!-- Sidebar: Risk & Portfolio -->
     <aside class="sidebar">
       <div class="card risk-card">
-        <h3 class="card-title">⚠️ Risk Monitor</h3>
+        <h3 class="card-title">🛡️ Risk Safeguards</h3>
         <div class="risk-grid">
           <div class="risk-item">
-            <span class="ri-label">Capital</span>
+            <span class="ri-label">Paper Capital</span>
             <span id="rm-capital" class="ri-value">₹5,00,000</span>
           </div>
           <div class="risk-item">
-            <span class="ri-label">Trades Today</span>
+            <span class="ri-label">Daily Trades</span>
             <span id="rm-trades" class="ri-value">0 / 4</span>
           </div>
           <div class="risk-item">
             <span class="ri-label">Today P&L</span>
-            <span id="rm-daily-pnl" class="ri-value neutral">₹0</span>
+            <span id="rm-daily-pnl" class="ri-value neutral">₹0.00</span>
           </div>
           <div class="risk-item">
             <span class="ri-label">Daily Loss Limit</span>
-            <span id="rm-daily-limit" class="ri-value warning">-3%</span>
+            <span id="rm-daily-limit" class="ri-value warning">-3.0%</span>
           </div>
           <div class="risk-item">
-            <span class="ri-label">Capital at Risk</span>
-            <span id="rm-risk" class="ri-value">0%</span>
+            <span class="ri-label">Cap at Risk</span>
+            <span id="rm-risk" class="ri-value">0.0%</span>
           </div>
           <div class="risk-item">
-            <span class="ri-label">Open Positions</span>
+            <span class="ri-label">Open Trades</span>
             <span id="rm-open" class="ri-value">0</span>
           </div>
         </div>
         <div class="risk-bar-container">
-          <div class="risk-bar-label">Daily Loss Used</div>
+          <div class="risk-bar-label">
+            <span>Daily Loss Used</span>
+            <span id="risk-bar-pct">0% / 3%</span>
+          </div>
           <div class="risk-bar">
             <div id="risk-bar-fill" class="risk-bar-fill" style="width: 0%"></div>
           </div>
-          <div id="risk-bar-pct" class="risk-bar-pct">0%</div>
         </div>
       </div>
 
       <div class="card portfolio-card">
-        <h3 class="card-title">📊 Portfolio</h3>
+        <h3 class="card-title">📊 Paper Ledger</h3>
         <div class="portfolio-stats">
           <div class="ps-item">
-            <span class="ps-label">Total P&L</span>
+            <span class="ps-label">Realized P&L</span>
             <span id="port-total-pnl" class="ps-value neutral">₹0.00</span>
           </div>
           <div class="ps-item">
@@ -106,10 +120,10 @@
       </div>
 
       <div class="card config-card">
-        <h3 class="card-title">⚙️ Scan Settings</h3>
+        <h3 class="card-title">⚙️ Scanner Scope</h3>
         <div class="settings-grid">
           <div style="display:flex;justify-content:space-between;align-items:center;">
-            <label class="setting-label">Symbols</label>
+            <label class="setting-label">Active Watchlist</label>
             <div style="display:flex;gap:4px;">
               <button type="button" class="btn-sm" style="padding:2px 6px;font-size:10px;" onclick="selectAllSymbols(true)">All</button>
               <button type="button" class="btn-sm" style="padding:2px 6px;font-size:10px;" onclick="selectIndicesOnly()">Index</button>
@@ -130,9 +144,9 @@
             <label class="checkbox-label"><input type="checkbox" value="WIPRO" class="sym-check"> WIPRO</label>
             <label class="checkbox-label"><input type="checkbox" value="LT" class="sym-check"> LT</label>
           </div>
-          <label class="setting-label">Auto Refresh</label>
-          <select id="auto-refresh-interval" class="setting-select">
-            <option value="0">Disabled</option>
+          <label class="setting-label">Auto-Scan Interval</label>
+          <select id="auto-refresh-interval" class="setting-select" onchange="setupAutoRefresh()">
+            <option value="0">Manual Only</option>
             <option value="60">Every 1 min</option>
             <option value="300" selected>Every 5 min</option>
             <option value="900">Every 15 min</option>
@@ -141,34 +155,41 @@
       </div>
     </aside>
 
-    <!-- Main content -->
+    <!-- Main Content Workstation -->
     <div class="content">
 
-      <!-- System banner -->
+      <!-- Status banner -->
       <div class="system-banner" id="system-banner">
-        <span class="sb-icon">📄</span>
-        <strong>PAPER TRADING MODE ACTIVE</strong> — Real money execution is disabled.
-        All trades are simulated for strategy testing and validation.
+        <span class="sb-icon">🛡️</span>
+        <div>
+          <strong>PAPER SIMULATOR ACTIVE</strong> — Real-money order execution is permanently hard-locked off.
+          All signals, risk gates, and paper orders are simulated for quantitative testing.
+        </div>
       </div>
 
       <!-- Scan status bar -->
       <div class="scan-status" id="scan-status">
-        <span id="scan-status-text">Click "Scan Markets" to generate trade signals</span>
+        <span id="scan-status-text">Click "Scan Markets" or press Ctrl+S to evaluate all symbols against the 7 quantitative pillars.</span>
         <span id="scan-loading" class="loading-spinner hidden"></span>
       </div>
 
-      <!-- Quantitative Matrix Overview Card -->
+      <!-- 7-Pillars Quantitative Engine Matrix -->
       <div class="quant-matrix-card">
         <div class="quant-matrix-header">
           <div>
-            <h3 style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;">
-              <span>⚡ 7-Pillars Quantitative Engine Matrix</span>
+            <h3 style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px;">
+              <span>⚡ 7-Pillars Quantitative Strategy Matrix</span>
             </h3>
-            <div style="font-size:11px;color:var(--text-muted);">
-              Real-time multi-indicator mathematical filters: RSI (14) · EMA 9/21/50 · VWAP · MACD · ATR (14) · Volume · S/R
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">
+              Live mathematical filters: RSI (14) · EMA 9/21/50 · Session VWAP · MACD · ATR (14) · Volume · S/R Headroom
             </div>
           </div>
-          <button class="btn-sm" onclick="runScan()">⚡ Refresh All</button>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="matrix-search" type="text" placeholder="Filter symbol..."
+              style="padding:5px 9px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-primary);font-size:11.5px;width:120px;"
+              oninput="filterMatrixTable(this.value)" />
+            <button class="btn-sm" onclick="runScan()">⚡ Scan All</button>
+          </div>
         </div>
         <div class="quant-table-wrapper">
           <table class="quant-table" id="quant-matrix-table">
@@ -188,8 +209,8 @@
             </thead>
             <tbody id="quant-matrix-tbody">
               <tr>
-                <td colspan="10" style="text-align:center;color:var(--text-muted);padding:14px;">
-                  Click "Scan Markets" to evaluate all symbols against the 7 quantitative pillars.
+                <td colspan="10" style="text-align:center;color:var(--text-muted);padding:18px;">
+                  Click <strong>"Scan Markets"</strong> to compute real-time quantitative metrics across all symbols.
                 </td>
               </tr>
             </tbody>
@@ -234,7 +255,7 @@
       <section class="tab-pane hidden" id="pane-rejections">
         <div class="section-header">
           <h2 class="section-title">⛔ Capital Protection & Rejection Log</h2>
-          <span class="section-subtitle">Setups refused by the quantitative engine to prevent capital drawdowns</span>
+          <span class="section-subtitle">Setups refused by the quantitative engine to safeguard capital</span>
         </div>
         <div id="rejections-container">
           <div class="empty-state">No rejected setups logged yet. Run scan to inspect.</div>
@@ -288,43 +309,22 @@
         </div>
       </section>
 
+      <!-- Open Paper Positions Section -->
+      <section class="trades-section" style="margin-top:10px;">
+        <div class="section-header">
+          <h2 class="section-title">📋 Active Paper Positions</h2>
+          <button class="btn-sm" onclick="loadOpenTrades()">Refresh Positions</button>
+        </div>
+        <div id="open-trades-container">
+          <div class="empty-state">No active paper positions</div>
+        </div>
+      </section>
+
       <!-- Transparency & Risk Disclaimer -->
       <div class="transparency-banner">
         <strong>⚖️ Quantitative Integrity & Performance Disclaimer:</strong><br/>
         TradePilot AI operates strictly as an <em>algorithmic paper-trading & mathematical decision-support system</em>. All entries and exits are calculated using deterministically audited rules across RSI, EMA, VWAP, MACD, ATR, Volume, and Support/Resistance. <strong>No quantitative model guarantees profitability</strong>. Futures & Options trading involves severe financial risk, leverage, and time decay (theta). Real-money order execution is hard-locked off. Never trade with capital you cannot afford to lose.
       </div>
-
-      <!-- Market Data Grid -->
-      <section class="market-section">
-        <div class="section-header">
-          <h2 class="section-title">📈 Market Overview</h2>
-        </div>
-        <div id="market-grid" class="market-grid">
-          <!-- Populated by JS -->
-        </div>
-      </section>
-
-      <!-- Open Trades -->
-      <section class="trades-section">
-        <div class="section-header">
-          <h2 class="section-title">📋 Open Paper Trades</h2>
-          <button class="btn-sm" onclick="loadOpenTrades()">Refresh</button>
-        </div>
-        <div id="open-trades-container">
-          <div class="empty-state">No open paper trades</div>
-        </div>
-      </section>
-
-      <!-- Trade History -->
-      <section class="trades-section">
-        <div class="section-header">
-          <h2 class="section-title">📜 Trade History</h2>
-          <button class="btn-sm" onclick="loadTradeHistory()">Load History</button>
-        </div>
-        <div id="trade-history-container">
-          <div class="empty-state">No trade history yet</div>
-        </div>
-      </section>
 
     </div>
   </main>
@@ -342,7 +342,7 @@
         <button class="btn-execute" id="btn-execute-trade" onclick="executeTrade()">
           📄 Execute Paper Trade
         </button>
-        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-cancel" onclick="closeModal()">Close</button>
       </div>
     </div>
   </div>
@@ -417,6 +417,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
 
   <script src="/static/js/dashboard.js"></script>
 </body>

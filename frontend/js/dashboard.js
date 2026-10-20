@@ -291,6 +291,25 @@ function renderQuantMatrixTable(marketData) {
       </tr>
     `;
   }).join('');
+
+  const searchInput = document.getElementById('matrix-search');
+  if (searchInput && searchInput.value) {
+    filterMatrixTable(searchInput.value);
+  }
+}
+
+function filterMatrixTable(query) {
+  const q = (query || '').trim().toUpperCase();
+  const rows = document.querySelectorAll('#quant-matrix-tbody tr');
+  rows.forEach(row => {
+    const symCell = row.cells[0];
+    if (!symCell) return;
+    if (!q || symCell.textContent.toUpperCase().includes(q)) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
 }
 
 // ================================================================
@@ -738,11 +757,49 @@ async function executeTrade() {
 }
 
 // ================================================================
-// Market Data Grid
+// Market Data & Live Ticker Strip
 // ================================================================
 
+function updateTickerTape(marketData) {
+  const symbolTickerMap = {
+    'NIFTY': { priceId: 'tick-nifty', chgId: 'tick-nifty-chg' },
+    'BANKNIFTY': { priceId: 'tick-banknifty', chgId: 'tick-banknifty-chg' },
+    'FINNIFTY': { priceId: 'tick-finnifty', chgId: 'tick-finnifty-chg' },
+    'RELIANCE': { priceId: 'tick-reliance', chgId: 'tick-reliance-chg' },
+    'HDFCBANK': { priceId: 'tick-hdfcbank', chgId: 'tick-hdfcbank-chg' },
+    'ICICIBANK': { priceId: 'tick-icicibank', chgId: 'tick-icicibank-chg' },
+    'TCS': { priceId: 'tick-tcs', chgId: 'tick-tcs-chg' },
+    'INFY': { priceId: 'tick-infy', chgId: 'tick-infy-chg' },
+  };
+
+  Object.entries(symbolTickerMap).forEach(([sym, ids]) => {
+    const data = marketData[sym];
+    if (!data || !data.spot_price) return;
+
+    const pEl = document.getElementById(ids.priceId);
+    const cEl = document.getElementById(ids.chgId);
+
+    if (pEl) {
+      pEl.textContent = data.spot_price.toLocaleString('en-IN', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+    }
+
+    if (cEl) {
+      const chg = data.indicators?.price_change_5m_pct || 0;
+      const isUp = chg >= 0;
+      cEl.textContent = `${isUp ? '+' : ''}${chg.toFixed(2)}%`;
+      cEl.className = `ticker-chg ${isUp ? 'up' : 'down'}`;
+    }
+  });
+}
+
 function renderMarketData(marketData) {
+  updateTickerTape(marketData);
+
   const grid = document.getElementById('market-grid');
+  if (!grid) return;
   grid.innerHTML = '';
 
   Object.entries(marketData).forEach(([symbol, data]) => {
@@ -983,28 +1040,9 @@ function renderTradeHistory(data) {
   if (container) container.innerHTML = historyHtml;
   if (tabContainer) tabContainer.innerHTML = historyHtml;
 }
-        </tr>
-      </thead>
-      <tbody>
-        ${trades.map(t => `
-          <tr>
-            <td class="mono" style="font-size:11px">${t.exit_time ? new Date(t.exit_time).toLocaleTimeString('en-IN', {timeZone:'Asia/Kolkata'}) : '--'}</td>
-            <td class="mono" style="color:var(--accent)">${t.option_symbol}</td>
-            <td class="mono">₹${t.entry_price?.toFixed(2)}</td>
-            <td class="mono">₹${t.exit_price?.toFixed(2) || '--'}</td>
-            <td class="mono">${t.quantity}</td>
-            <td class="mono ${(t.pnl || 0) >= 0 ? 'pnl-pos' : 'pnl-neg'}">₹${(t.pnl || 0).toFixed(2)}</td>
-            <td class="mono ${(t.pnl_pct || 0) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${(t.pnl_pct || 0).toFixed(1)}%</td>
-            <td style="font-size:11px;color:var(--text-muted)">${t.exit_reason || '--'}</td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
-}
 
 // ================================================================
-// Notifications
+// Notifications & Toast System
 // ================================================================
 
 function showSuccess(msg) {
@@ -1015,19 +1053,21 @@ function showError(msg) {
 }
 
 function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container') || document.body;
   const toast = document.createElement('div');
-  const bg = type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--accent)';
-  toast.style.cssText = `
-    position:fixed; bottom:20px; right:20px; z-index:9999;
-    background:${bg}; color:#000; padding:12px 20px;
-    border-radius:10px; font-size:13px; font-weight:600;
-    box-shadow:0 4px 20px rgba(0,0,0,0.5);
-    animation: slideIn 0.3s ease;
-    max-width: 400px;
-  `;
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
+  toast.className = `toast ${type}`;
+  toast.style.pointerEvents = 'auto';
+
+  const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+  toast.innerHTML = `<span style="margin-right:6px;">${icon}</span><span>${msg}</span>`;
+
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100%)';
+    toast.style.transition = 'all 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 4000);
 }
 
 // ================================================================
