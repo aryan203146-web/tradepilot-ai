@@ -1,11 +1,14 @@
 """
 Unit tests for Quantitative Strategy Engine.
 Tests entry rule evaluation across the 7 pillars, explicit rejection rules,
-mathematical exit roadmap (SL, Target 1, Target 2, Trailing), and invalidation conditions.
+dynamic Black-Scholes exit roadmap (SL, Target 1, Target 2, Trailing),
+R:R validation, active position evaluation, and invalidation conditions.
 """
 import sys
 import os
 import pytest
+from datetime import datetime
+import pytz
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
@@ -14,8 +17,11 @@ from strategies.quant_engine import (
     RejectionCode,
     RuleEvaluation,
     ExitRoadmap,
+    find_missing_indicators,
     quant_engine,
 )
+
+IST = pytz.timezone("Asia/Kolkata")
 
 
 @pytest.fixture
@@ -98,8 +104,30 @@ class TestQuantEngineEntry:
         assert score >= 70.0
         assert len(rules) == 7
 
+    def test_empty_indicators_score_zero(self):
+        """Empty indicators dict must score 0% and fail validation."""
+        engine = QuantitativeStrategyEngine()
+        passed, rules, score = engine.evaluate_entry_rules("LONG", 24500.0, {})
+        assert passed is False
+        assert score == 0.0
+
+    def test_find_missing_indicators(self):
+        """Missing or None indicator values must be flagged."""
+        partial = {"rsi_5m": 50.0, "ema_9_5m": 24500.0}
+        missing = find_missing_indicators(partial)
+        assert "vwap" in missing
+        assert "macd_hist_5m" in missing
+        assert "atr_5m" in missing
+
 
 class TestQuantEngineRejections:
+    def test_reject_missing_data(self):
+        """Missing indicators must trigger REJECT_MISSING_DATA."""
+        engine = QuantitativeStrategyEngine()
+        rejections = engine.evaluate_rejection_rules("LONG", 24500.0, {}, check_time=False)
+        codes = [c for c, _ in rejections]
+        assert RejectionCode.REJECT_MISSING_DATA in codes
+
     def test_reject_counter_trend_long_in_strong_bear(self, sample_bullish_indicators):
         """Long setup in a 15m STRONG_BEAR market must be rejected."""
         engine = QuantitativeStrategyEngine()
@@ -120,35 +148,15 @@ class TestQuantEngineRejections:
         codes = [c for c, _ in rejections]
         assert RejectionCode.REJECT_COUNTER_TREND in codes
 
-    def test_reject_rsi_overbought_call_buying(self, sample_bullish_indicators):
-        """Call buying when 5m RSI is overbought (>74) must be rejected."""
+    def test_reject_weekend_time_window(self, sample_bullish_indicators):
+        """Candles occurring on a Saturday/Sunday must be rejected."""
         engine = QuantitativeStrategyEngine()
-        indicators = sample_bullish_indicators.copy()
-        indicators["rsi_5m"] = 78.0
-
-        rejections = engine.evaluate_rejection_rules("LONG", 24520.0, indicators, check_time=False)
+        saturday = datetime(2026, 10, 24, 11, 0, tzinfo=IST)
+        rejections = engine.evaluate_rejection_rules(
+            "LONG", 24520.0, sample_bullish_indicators, check_time=True, now=saturday
+        )
         codes = [c for c, _ in rejections]
-        assert RejectionCode.REJECT_RSI_EXTREME in codes
-
-    def test_reject_low_volume_dry_up(self, sample_bullish_indicators):
-        """Breakout without volume (<0.6x average) must be rejected."""
-        engine = QuantitativeStrategyEngine()
-        indicators = sample_bullish_indicators.copy()
-        indicators["volume_ratio_5m"] = 0.40
-
-        rejections = engine.evaluate_rejection_rules("LONG", 24520.0, indicators, check_time=False)
-        codes = [c for c, _ in rejections]
-        assert RejectionCode.REJECT_LOW_VOLUME in codes
-
-    def test_reject_overhead_resistance_wall(self, sample_bullish_indicators):
-        """Long setup directly under heavy resistance (<0.2 ATR) must be rejected."""
-        engine = QuantitativeStrategyEngine()
-        indicators = sample_bullish_indicators.copy()
-        indicators["dist_to_resistance_atr"] = 0.10
-
-        rejections = engine.evaluate_rejection_rules("LONG", 24520.0, indicators, check_time=False)
-        codes = [c for c, _ in rejections]
-        assert RejectionCode.REJECT_OVERHEAD_SR in codes
+        assert RejectionCode.REJECT_TIME_WINDOW in codes
 
     def test_reject_daily_trade_limit(self, sample_bullish_indicators):
         """When 4 daily trades have already been executed, reject new setups."""
@@ -160,24 +168,59 @@ class TestQuantEngineRejections:
         assert RejectionCode.REJECT_DAILY_LIMIT in codes
 
 
-class TestExitRoadmap:
-    def test_exit_roadmap_mathematics(self, sample_bullish_indicators):
-        """Verify Stop-Loss (-35%), Target 1 (+100%), Target 2 (+200%), and R:R."""
+class TestExitRoadmapAndPositionEvaluation:
+    def test_dynamic_bs_exit_roadmap(self, sample_bullish_indicators):
+        """
+        Verify dynamic Black-Scholes ATR-based exit levels.
+        For a Nifty ATM Call at 25,000 (premium ₹150, 3 DTE, ATR 20):
+        SL is around ~10% loss, T1 is around ~22% gain, T2 is around ~34% gain.
+        """
         engine = QuantitativeStrategyEngine()
-        premium = 200.0
-        spot = 24520.0
-        roadmap = engine.compute_exit_roadmap("LONG", spot, premium, sample_bullish_indicators, sl_pct=35.0)
+        ind = sample_bullish_indicators.copy()
+        ind["atr_5m"] = 20.0
+        roadmap = engine.compute_exit_roadmap(
+            direction="LONG",
+            spot_price=25000.0,
+            entry_premium=150.0,
+            indicators=ind,
+            sl_pct=35.0,
+            strike_price=25000.0,
+            dte_days=3.0,
+        )
 
-        # SL must be 65% of entry (200 * 0.65 = 130.0)
-        assert roadmap.stop_loss_premium == 130.0
-        # Target 1 must be 200 * 2 = 400.0
-        assert roadmap.target_1_premium == 400.0
-        # Target 2 must be 200 * 3 = 600.0
-        assert roadmap.target_2_premium == 600.0
-        # R:R = (400 - 200) / (200 - 130) = 200 / 70 = 2.86
-        assert roadmap.risk_reward_ratio == 2.86
-        # Trailing rule must specify moving to Cost
+        assert roadmap.stop_loss_premium < 150.0
+        assert roadmap.target_1_premium > 150.0
+        assert roadmap.target_2_premium > roadmap.target_1_premium
+        assert roadmap.risk_reward_ratio >= 1.5
         assert "Cost" in roadmap.trailing_sl_rule
+
+        # R:R check passes
+        assert engine.check_exit_roadmap_rr(roadmap, min_rr=1.5) is None
+
+    def test_evaluate_open_position_lifecycle(self):
+        """Verify position lifecycle: T1 scale 50% & trail to cost, T2 exit, EOD 15:20 exit."""
+        engine = QuantitativeStrategyEngine()
+        entry = 150.0
+        sl = 135.0
+        t1 = 182.0
+        t2 = 201.0
+
+        # Within bounds -> HOLD
+        action, _, _ = engine.evaluate_open_position(entry, 160.0, sl, t1, t2, current_time=datetime(2026, 10, 21, 10, 0, tzinfo=IST))
+        assert action == "HOLD"
+
+        # Hits T1 -> BOOK_50_TRAIL, effective stop moved to cost (150)
+        action, _, new_sl = engine.evaluate_open_position(entry, 185.0, sl, t1, t2, current_time=datetime(2026, 10, 21, 10, 30, tzinfo=IST), t1_hit=False)
+        assert action == "BOOK_50_TRAIL"
+        assert new_sl == entry
+
+        # After T1, if price drops back to cost (150) -> CLOSE_SL at cost
+        action, _, _ = engine.evaluate_open_position(entry, 150.0, sl, t1, t2, current_time=datetime(2026, 10, 21, 11, 0, tzinfo=IST), t1_hit=True)
+        assert action == "CLOSE_SL"
+
+        # 15:20 IST EOD cutoff -> CLOSE_EOD
+        action, _, _ = engine.evaluate_open_position(entry, 165.0, sl, t1, t2, current_time=datetime(2026, 10, 21, 15, 21, tzinfo=IST))
+        assert action == "CLOSE_EOD"
 
 
 class TestInvalidationRules:

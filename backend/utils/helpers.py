@@ -2,11 +2,14 @@
 Helper utilities for TradePilot AI
 """
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timezone, timedelta
 from typing import Optional
-import pytz
 
-IST = pytz.timezone("Asia/Kolkata")
+try:
+    import pytz
+    IST = pytz.timezone("Asia/Kolkata")
+except ImportError:
+    IST = timezone(timedelta(hours=5, minutes=30))
 
 logging.basicConfig(
     level=logging.INFO,

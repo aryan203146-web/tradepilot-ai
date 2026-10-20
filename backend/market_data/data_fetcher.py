@@ -30,8 +30,12 @@ def _generate_simulated_ohlcv(symbol: str, interval: str, periods: int = 100) ->
     """
     Generate realistic simulated OHLCV data for paper trading when live data unavailable.
     """
-    import pytz
-    IST = pytz.timezone("Asia/Kolkata")
+    try:
+        import pytz
+        IST = pytz.timezone("Asia/Kolkata")
+    except ImportError:
+        from datetime import timezone, timedelta
+        IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST)
 
     # Base prices for simulation
@@ -259,8 +263,12 @@ def get_options_chain_mock(symbol: str, spot_price: float, strike_gap: int) -> D
     except Exception as e:
         logger.warning(f"Upstox option chain lookup fallback: {e}")
 
-    import pytz
-    IST = pytz.timezone("Asia/Kolkata")
+    try:
+        import pytz
+        IST = pytz.timezone("Asia/Kolkata")
+    except ImportError:
+        from datetime import timezone, timedelta
+        IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST)
 
     # Calculate Days to Expiry (DTE)

@@ -83,6 +83,18 @@ class SignalOrchestrator:
         indicators['pcr'] = options_chain.get('pcr', 1.0)
         indicators['iv_percentile'] = options_chain.get('iv_percentile', 50)
 
+        # Candle timestamp for backtest / session time alignment
+        as_of = None
+        if df_5m is not None and len(df_5m) > 0:
+            try:
+                last_dt = df_5m.index[-1]
+                if hasattr(last_dt, 'to_pydatetime'):
+                    as_of = last_dt.to_pydatetime()
+                    if as_of.tzinfo is None:
+                        as_of = IST.localize(as_of)
+            except Exception:
+                as_of = None
+
         # 4. Generate buying signal
         buying_signal = self.buying_strategy.generate_signal(
             symbol=symbol,
@@ -90,6 +102,7 @@ class SignalOrchestrator:
             indicators=indicators,
             options_chain=options_chain,
             daily_trades_count=self.daily_trades_count,
+            as_of=as_of,
         )
 
         # 5. Validate buying signal

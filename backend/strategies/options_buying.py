@@ -2,13 +2,17 @@
 Options Buying Strategy Engine for TradePilot AI
 Generates intraday call/put buying signals using all 7 quantitative pillars:
 RSI, EMA, VWAP, MACD, ATR, Volume, and Support/Resistance.
-Includes explicit entry rules, exit roadmap, invalidation conditions, and rejection handling.
+Includes explicit entry rules, dynamic Black-Scholes exit roadmap, invalidation conditions, and rejection handling.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Tuple, List
 
-import pytz
+try:
+    import pytz
+    IST = pytz.timezone("Asia/Kolkata")
+except ImportError:
+    IST = timezone(timedelta(hours=5, minutes=30))
 
 from models.trade import (
     TradeSignal, TradeDirection, OptionType, TradeType,
@@ -16,11 +20,9 @@ from models.trade import (
 )
 from config import INDEX_SYMBOLS, FO_STOCKS, OPTIONS_BUYING_CONFIG, RISK_CONFIG
 from utils.helpers import get_atm_strike, round_to_strike, get_nearest_expiry_string
-from market_data.data_fetcher import black_scholes_pricing
-from strategies.quant_engine import quant_engine, RejectionCode
+from strategies.quant_engine import quant_engine, RejectionCode, black_scholes_pricing
 
 logger = logging.getLogger("tradepilot.strategy.buying")
-IST = pytz.timezone("Asia/Kolkata")
 
 
 class OptionsBuyingStrategy:
@@ -36,6 +38,7 @@ class OptionsBuyingStrategy:
         indicators: Dict,
         options_chain: Dict,
         daily_trades_count: int = 0,
+        as_of: Optional[datetime] = None,
     ) -> TradeSignal:
         """
         Generate a quantitative options buying signal.
@@ -52,6 +55,15 @@ class OptionsBuyingStrategy:
         lot_size = sym_config.get('lot_size', 50)
         strike_gap = sym_config.get('strike_gap', 50)
         signal.lot_size = lot_size
+
+        # Guard: Reject missing indicator data upfront
+        missing = quant_engine.find_missing_indicators(indicators)
+        if missing:
+            signal.is_no_trade = True
+            signal.rejection_codes = [RejectionCode.REJECT_MISSING_DATA.value]
+            signal.no_trade_reason = "Missing indicator data: " + ", ".join(missing)
+            signal.validation_notes = [f"⛔ {signal.no_trade_reason}"]
+            return signal
 
         # Populate indicator snapshot
         signal.indicators = IndicatorValues(
@@ -166,7 +178,8 @@ class OptionsBuyingStrategy:
             indicators=indicators,
             daily_trades_count=daily_trades_count,
             max_daily_trades=RISK_CONFIG['max_trades_per_day'],
-            check_time=False,  # Allow scanning at all times; flag in reasons
+            check_time=True,
+            now=as_of,
         )
 
         if rejections:
@@ -232,7 +245,7 @@ class OptionsBuyingStrategy:
         signal.entry_price_range_high = round(premium * 1.05, 2)
 
         # ----------------------------------------------------
-        # Step 6: Explicit Exit Roadmap (SL, T1 Scale 50%, T2, Trailing)
+        # Step 6: Dynamic ATR-based Exit Roadmap & R:R Verification
         # ----------------------------------------------------
         exit_roadmap = quant_engine.compute_exit_roadmap(
             direction=direction_str,
@@ -240,7 +253,23 @@ class OptionsBuyingStrategy:
             entry_premium=premium,
             indicators=indicators,
             sl_pct=OPTIONS_BUYING_CONFIG['max_sl_pct'],
+            strike_price=signal.strike_price,
+            dte_days=options_chain.get('dte_days', 5.0),
         )
+
+        # Enforce minimum Risk:Reward check
+        rr_rejection = quant_engine.check_exit_roadmap_rr(
+            exit_roadmap,
+            min_rr=OPTIONS_BUYING_CONFIG.get('min_rr_ratio', 1.5)
+        )
+        if rr_rejection:
+            code, reason = rr_rejection
+            signal.is_no_trade = True
+            signal.rejection_codes = [code.value]
+            signal.no_trade_reason = f"[{code.value}] {reason}"
+            signal.validation_notes = [f"⛔ {signal.no_trade_reason}"]
+            return signal
+
         signal.exit_roadmap = exit_roadmap.to_dict()
         signal.stop_loss = exit_roadmap.stop_loss_premium
         signal.stop_loss_pct = exit_roadmap.stop_loss_pct
@@ -248,12 +277,23 @@ class OptionsBuyingStrategy:
         signal.target_2 = exit_roadmap.target_2_premium
         signal.risk_reward_ratio = exit_roadmap.risk_reward_ratio
 
-        # Position Sizing
+        # Position Sizing: strictly risk-bounded (no forced lots)
         capital = RISK_CONFIG['paper_trading_capital']
         max_risk_amount = capital * (OPTIONS_BUYING_CONFIG['max_capital_risk_pct'] / 100.0)
         risk_per_unit = max(0.01, premium - signal.stop_loss)
         loss_per_lot = risk_per_unit * lot_size
-        lots = max(1, int(max_risk_amount / loss_per_lot)) if loss_per_lot > 0 else 1
+
+        lots = int(max_risk_amount // loss_per_lot) if loss_per_lot > 0 else 0
+        if lots < 1:
+            signal.is_no_trade = True
+            signal.rejection_codes = [RejectionCode.REJECT_INSUFFICIENT_RR.value]
+            signal.no_trade_reason = (
+                f"One lot risks ₹{loss_per_lot:.0f}, above the "
+                f"₹{max_risk_amount:.0f} per-trade risk limit."
+            )
+            signal.validation_notes = [f"⛔ {signal.no_trade_reason}"]
+            return signal
+
         signal.position_size_lots = lots
         signal.capital_at_risk = round(loss_per_lot * lots, 2)
         signal.capital_at_risk_pct = round((signal.capital_at_risk / capital) * 100.0, 2)
@@ -274,17 +314,21 @@ class OptionsBuyingStrategy:
             direction=direction_str,
             spot_price=spot_price,
             indicators=indicators,
+            sl_pct=signal.stop_loss_pct,
         )
 
-        # Build human-readable entry narrative
+        # Dynamic human-readable entry narrative
+        t1_pct = ((signal.target_1 / premium) - 1.0) * 100.0
+        t2_pct = ((signal.target_2 / premium) - 1.0) * 100.0
+
         signal.entry_conditions = [
             f"1. Entry: Buy {signal.symbol} {int(signal.strike_price)}{opt_type_str} at limit ₹{signal.entry_price:.2f} (buffer ₹{signal.entry_price_range_low:.2f} - ₹{signal.entry_price_range_high:.2f}).",
             f"2. Spot Benchmark: Underlying {signal.symbol} spot at ₹{spot_price:.2f} ({'above' if direction_str == 'LONG' else 'below'} VWAP ₹{vwap:.2f}).",
             f"3. Quantitative Confirmation: Score {score_pct}% ({sum(1 for e in evaluations if e.passed)}/7 rules verified).",
             f"4. RSI Momentum: 5m RSI at {rsi_5m:.1f} (in active {direction_str.lower()} expansion zone).",
-            f"5. Target 1 (Scale 50%): ₹{signal.target_1:.2f} (+100%), then trail Stop-Loss to Cost.",
-            f"6. Target 2 (Runner): ₹{signal.target_2:.2f} (+200%).",
-            f"7. Hard Stop-Loss: ₹{signal.stop_loss:.2f} (-35% capital protection).",
+            f"5. Target 1 (Scale 50%): ₹{signal.target_1:.2f} ({t1_pct:+.0f}%), then move Stop-Loss to cost.",
+            f"6. Target 2 (Runner): ₹{signal.target_2:.2f} ({t2_pct:+.0f}%).",
+            f"7. Hard Stop-Loss: ₹{signal.stop_loss:.2f} (-{signal.stop_loss_pct:.0f}%).",
         ]
 
         signal.validity_duration_minutes = 30
