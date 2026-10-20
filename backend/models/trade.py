@@ -105,6 +105,12 @@ class TradeSignal:
     invalidation_conditions: List[str] = field(default_factory=list)
     validity_duration_minutes: int = 30
 
+    # Explicit Quantitative Engine structures
+    entry_rules: List[dict] = field(default_factory=list)
+    exit_roadmap: Optional[dict] = None
+    rejection_codes: List[str] = field(default_factory=list)
+    score_pct: float = 0.0
+
     # Indicators at signal time
     indicators: IndicatorValues = field(default_factory=IndicatorValues)
 
@@ -145,6 +151,10 @@ class TradeSignal:
             "max_loss_per_trade": self.max_loss_per_trade,
             "invalidation_conditions": self.invalidation_conditions,
             "validity_duration_minutes": self.validity_duration_minutes,
+            "entry_rules": self.entry_rules,
+            "exit_roadmap": self.exit_roadmap,
+            "rejection_codes": self.rejection_codes,
+            "score_pct": self.score_pct,
             "timeframe": self.timeframe,
             "validation_passed": self.validation_passed,
             "validation_notes": self.validation_notes,

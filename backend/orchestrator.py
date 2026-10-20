@@ -202,15 +202,21 @@ class SignalOrchestrator:
                     results['signals'].extend(signals_for_symbol)
                 else:
                     no_trade_reasons = []
-                    if buying:
+                    rej_codes = []
+                    if buying and buying.no_trade_reason:
                         no_trade_reasons.append(f"Buying: {buying.no_trade_reason}")
-                    if selling:
+                        rej_codes.extend(buying.rejection_codes or [])
+                    if selling and selling.no_trade_reason:
                         no_trade_reasons.append(f"Selling: {selling.no_trade_reason}")
+                        rej_codes.extend(selling.rejection_codes or [])
                     results['no_trade_symbols'].append({
                         'symbol': symbol,
-                        'reasons': no_trade_reasons,
+                        'spot_price': mdata.get('spot_price'),
+                        'reasons': no_trade_reasons or ["No valid setup found"],
+                        'rejection_codes': list(dict.fromkeys(rej_codes)),
+                        'indicators': mdata.get('indicators', {})
                     })
-                    logger.info(f"⛔ NO TRADE for {symbol}")
+                    logger.info(f"⛔ NO TRADE for {symbol}: {', '.join(no_trade_reasons)}")
 
             except Exception as e:
                 logger.error(f"Error analyzing {symbol}: {e}", exc_info=True)

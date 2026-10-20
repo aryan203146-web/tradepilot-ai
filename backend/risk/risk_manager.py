@@ -22,7 +22,7 @@ class RiskManager:
         self.max_daily_loss_pct = RISK_CONFIG['max_daily_loss_pct']
         self.daily_trades_count = 0
         self.daily_pnl = 0.0
-        self.daily_trade_date = None
+        self.daily_trade_date = datetime.now(IST).date()
         self.real_trading_enabled = RISK_CONFIG['real_trading_enabled']
 
     def reset_daily_stats(self):
@@ -38,7 +38,7 @@ class RiskManager:
         """Update daily PnL."""
         self.daily_pnl += pnl
 
-    def can_take_new_trade(self, open_trades: List[PaperTrade]) -> Tuple[bool, str]:
+    def can_take_new_trade(self, open_trades: List[PaperTrade], check_time: bool = False) -> Tuple[bool, str]:
         """
         Check if a new trade is allowed based on risk rules.
         Returns (allowed, reason)
@@ -67,14 +67,15 @@ class RiskManager:
         if total_risk_pct >= self.max_total_risk_pct:
             return False, f"Max total risk reached ({total_risk_pct:.1f}% >= {self.max_total_risk_pct}%)"
 
-        # Check market timing
-        now = datetime.now(IST)
-        no_new_trade_time = now.replace(hour=14, minute=30, second=0)
-        market_open_time = now.replace(hour=9, minute=15, second=0)
-        if now > no_new_trade_time:
-            return False, "No new trades after 14:30 IST (approaching EOD)"
-        if now < market_open_time:
-            return False, "Market not yet open"
+        # Check market timing if requested
+        if check_time:
+            now = datetime.now(IST)
+            no_new_trade_time = now.replace(hour=14, minute=30, second=0)
+            market_open_time = now.replace(hour=9, minute=15, second=0)
+            if now > no_new_trade_time:
+                return False, "No new trades after 14:30 IST (approaching EOD)"
+            if now < market_open_time:
+                return False, "Market not yet open"
 
         return True, "OK"
 

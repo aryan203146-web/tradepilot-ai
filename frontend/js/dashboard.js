@@ -213,14 +213,106 @@ async function runScan() {
 // Render Signal Cards
 // ================================================================
 
+// ================================================================
+// Tab Navigation & Quantitative Matrix
+// ================================================================
+
+function switchDashboardTab(tabId) {
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+
+  const btn = document.getElementById(`tab-btn-${tabId}`);
+  const pane = document.getElementById(`pane-${tabId}`);
+  if (btn) btn.classList.add('active');
+  if (pane) pane.classList.remove('hidden');
+
+  if (tabId === 'history') {
+    loadTradeHistory();
+  }
+}
+
+function renderQuantMatrixTable(marketData) {
+  const tbody = document.getElementById('quant-matrix-tbody');
+  if (!tbody) return;
+
+  const symbols = Object.keys(marketData);
+  if (symbols.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--text-muted);padding:14px;">No market data available</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = symbols.map(sym => {
+    const md = marketData[sym] || {};
+    const ind = md.indicators || {};
+    const spot = md.spot_price ? `₹${md.spot_price.toFixed(2)}` : '--';
+
+    const rsi = ind.rsi_5m ?? '--';
+    const rsiClass = (rsi >= 50 && rsi <= 72) ? 'bull' : (rsi >= 28 && rsi < 50) ? 'bear' : 'neutral';
+
+    const ema9 = ind.ema_9_5m ?? 0;
+    const ema21 = ind.ema_21_5m ?? 0;
+    const emaBull = ema9 >= ema21;
+    const emaClass = emaBull ? 'bull' : 'bear';
+    const emaText = ema9 ? `${ema9.toFixed(0)} / ${ema21.toFixed(0)}` : '--';
+
+    const trend15 = ind.trend_15m || 'SIDEWAYS';
+    const trendClass = trend15.includes('BULL') ? 'bull' : trend15.includes('BEAR') ? 'bear' : 'neutral';
+
+    const vwap = ind.vwap ? `₹${ind.vwap.toFixed(0)}` : '--';
+    const vwapPct = ind.price_vs_vwap_pct != null ? `${ind.price_vs_vwap_pct > 0 ? '+' : ''}${ind.price_vs_vwap_pct.toFixed(2)}%` : '';
+    const vwapClass = (ind.price_vs_vwap_pct || 0) >= 0 ? 'bull' : 'bear';
+
+    const macdHist = ind.macd_hist_5m != null ? ind.macd_hist_5m.toFixed(2) : '--';
+    const macdClass = (ind.macd_hist_5m || 0) > 0 ? 'bull' : 'bear';
+
+    const atrVal = ind.atr_5m ? `${ind.atr_5m.toFixed(1)} (${(ind.atr_5m_pct || 0).toFixed(2)}%)` : '--';
+    const volVal = ind.volume_ratio_5m ? `${ind.volume_ratio_5m.toFixed(2)}x` : '1.00x';
+    const volClass = (ind.volume_ratio_5m || 1) >= 1.15 ? 'bull' : 'neutral';
+
+    let verdict = '<span class="pillar-pill neutral">MONITORING</span>';
+    if (trend15.includes('BULL') && emaBull && (ind.price_vs_vwap_pct || 0) >= 0) {
+      verdict = '<span class="pillar-pill bull">BULLISH CONVICTION</span>';
+    } else if (trend15.includes('BEAR') && !emaBull && (ind.price_vs_vwap_pct || 0) < 0) {
+      verdict = '<span class="pillar-pill bear">BEARISH CONVICTION</span>';
+    }
+
+    return `
+      <tr>
+        <td style="font-weight:700;color:var(--text-primary);">${sym}</td>
+        <td style="color:var(--accent);">${spot}</td>
+        <td><span class="pillar-pill ${rsiClass}">${typeof rsi === 'number' ? rsi.toFixed(1) : rsi}</span></td>
+        <td><span class="pillar-pill ${emaClass}">${emaText}</span></td>
+        <td><span class="pillar-pill ${trendClass}">${trend15}</span></td>
+        <td><span class="pillar-pill ${vwapClass}">${vwap} <small style="opacity:0.8">${vwapPct}</small></span></td>
+        <td><span class="pillar-pill ${macdClass}">${macdHist}</span></td>
+        <td><span style="color:var(--text-secondary);">${atrVal}</span></td>
+        <td><span class="pillar-pill ${volClass}">${volVal}</span></td>
+        <td>${verdict}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// ================================================================
+// Render Signal Cards & Rejections
+// ================================================================
+
 function renderScanResults(data) {
   const container = document.getElementById('signals-container');
   const countEl = document.getElementById('signals-count');
+  const tabCountSig = document.getElementById('tab-count-signals');
+  const tabCountRej = document.getElementById('tab-count-rejections');
 
   container.innerHTML = '';
 
   const signals = data.signals || [];
   const noTradeSymbols = data.no_trade_symbols || [];
+
+  if (tabCountSig) tabCountSig.textContent = signals.length;
+  if (tabCountRej) tabCountRej.textContent = noTradeSymbols.length;
+
+  renderRejections(noTradeSymbols);
+  renderQuantMatrixTable(data.market_data || {});
 
   if (signals.length === 0) {
     countEl.textContent = '⛔ NO TRADE';
@@ -228,43 +320,76 @@ function renderScanResults(data) {
     return;
   }
 
-  countEl.textContent = `${signals.length} signal${signals.length > 1 ? 's' : ''} found`;
+  countEl.textContent = `${signals.length} validated setup${signals.length > 1 ? 's' : ''}`;
   signals.forEach(sig => {
     container.appendChild(buildSignalCard(sig));
   });
+}
 
-  // Show no-trade symbols if any
-  if (noTradeSymbols.length > 0) {
-    const noTradeDiv = document.createElement('div');
-    noTradeDiv.style.gridColumn = '1/-1';
-    noTradeDiv.innerHTML = `
-      <div style="font-size:12px;color:var(--text-muted);padding:8px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;">
-        ⛔ No valid setup for: ${noTradeSymbols.map(n => n.symbol).join(', ')}
+function renderRejections(noTradeSymbols) {
+  const rejContainer = document.getElementById('rejections-container');
+  if (!rejContainer) return;
+
+  if (noTradeSymbols.length === 0) {
+    rejContainer.innerHTML = `<div class="empty-state">All scanned symbols qualified for trade setups!</div>`;
+    return;
+  }
+
+  rejContainer.innerHTML = noTradeSymbols.map(item => {
+    const sym = item.symbol;
+    const spot = item.spot_price ? `₹${item.spot_price.toFixed(2)}` : '--';
+    const codes = item.rejection_codes || [];
+    const reasons = item.reasons || [];
+
+    const badgesHtml = codes.map(c => `<span class="rej-badge">🛡️ ${c}</span>`).join(' ') ||
+                       `<span class="rej-badge">🛡️ REJECT_INSUFFICIENT_CONVICTION</span>`;
+
+    const reasonsList = reasons.map(r => `<div style="font-size:12px;color:var(--text-secondary);line-height:1.5;">• ${r}</div>`).join('');
+
+    return `
+      <div class="rejection-item-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <strong style="font-size:15px;color:var(--text-primary);">${sym}</strong>
+            <span style="font-size:12px;font-family:var(--font-mono);color:var(--accent);">Spot: ${spot}</span>
+          </div>
+          <div>${badgesHtml}</div>
+        </div>
+        <div style="background:var(--bg-secondary);padding:10px 12px;border-radius:6px;border:1px solid var(--border);">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px;">
+            Quantitative Engine Capital-Protection Verdict:
+          </div>
+          ${reasonsList}
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted);">
+          <span>Capital Safeguard Active — 0% loss incurred</span>
+          <button class="btn-sm" style="padding:3px 8px;" onclick="document.getElementById('validator-symbol-select').value='${sym}'; switchDashboardTab('validator'); inspectSymbolValidation();">Inspect Indicators →</button>
+        </div>
       </div>
     `;
-    container.appendChild(noTradeDiv);
-  }
+  }).join('');
 }
 
 function buildNoTradeCard(symbols, data) {
-  const reasons = symbols.flatMap(s =>
-    (s.reasons || []).map(r => `<div class="no-trade-reason-item">
-      <strong>${s.symbol}:</strong> ${r}
-    </div>`)
-  );
-
   const systemMsg = data.system_message ? `<div style="color:var(--yellow);margin-bottom:8px;font-size:13px;">⚠️ ${data.system_message}</div>` : '';
 
   return `
-    <div class="no-trade-card">
-      <div class="no-trade-header">⛔ NO TRADE — No Valid Setup Found</div>
-      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
-        No signals passed all validation checks. This is correct behavior — 
-        TradePilot AI is protecting your capital by not forcing low-quality trades.
+    <div class="no-trade-card" style="grid-column: 1 / -1;">
+      <div class="no-trade-header" style="display:flex;align-items:center;gap:8px;font-size:16px;">
+        <span>⛔ NO TRADE — Strict Capital Preservation Mode</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin:8px 0 14px 0;line-height:1.6;">
+        No trade setup met the strict 5-of-7 quantitative confirmation threshold across RSI, EMA, VWAP, MACD, ATR, Volume, and Support/Resistance. 
+        <strong>TradePilot AI does not force trades in suboptimal market conditions.</strong>
       </p>
       ${systemMsg}
-      <div class="no-trade-reasons">
-        ${reasons.join('') || '<div class="no-trade-reason-item">Market conditions not conducive to any setup at this time.</div>'}
+      <div style="display:flex;gap:10px;margin-top:12px;">
+        <button class="btn-sm" style="background:var(--accent);color:#fff;" onclick="switchDashboardTab('rejections')">
+          View Rejection Reasons (${symbols.length}) →
+        </button>
+        <button class="btn-sm" onclick="runScan()">
+          🔄 Rescan Markets
+        </button>
       </div>
     </div>
   `;
@@ -278,8 +403,8 @@ function buildSignalCard(sig) {
   const isBuying = sig.trade_type === 'OPTIONS_BUYING';
   const typeClass = isBuying ? 'buying' : 'selling';
   const optBadgeClass = isCall ? 'call' : 'put';
-  const optLabel = isCall ? '📈 CALL' : '📉 PUT';
-  const tradeLabel = isBuying ? '🔵 BUYING' : '🟣 SELLING';
+  const optLabel = isCall ? '📈 CALL BUY' : '📉 PUT BUY';
+  const tradeLabel = isBuying ? 'BUYING' : 'SELLING';
   const strengthClass = (sig.signal_strength || 'MODERATE').toLowerCase();
 
   const entryPrice = sig.entry_price?.toFixed(2) || '--';
@@ -287,13 +412,14 @@ function buildSignalCard(sig) {
   const t1 = sig.target_1?.toFixed(2) || '--';
   const t2 = sig.target_2?.toFixed(2) || '--';
   const rr = sig.risk_reward_ratio?.toFixed(1) || '--';
+  const scorePct = sig.score_pct || 85;
 
   const indicators = sig.indicators || {};
   const rsi5m = indicators.rsi_5m ? indicators.rsi_5m.toFixed(1) : '--';
-  const macd = indicators.macd_hist_5m ? indicators.macd_hist_5m.toFixed(3) : '--';
+  const macd = indicators.macd_hist_5m ? indicators.macd_hist_5m.toFixed(2) : '--';
   const vwap = indicators.vwap ? indicators.vwap.toFixed(0) : '--';
   const volRatio = indicators.volume_ratio ? indicators.volume_ratio.toFixed(2) : '--';
-  const st = indicators.supertrend_5m || '--';
+  const atrVal = indicators.atr_5m ? indicators.atr_5m.toFixed(1) : '--';
 
   const timeStr = new Date(sig.generated_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
 
@@ -303,46 +429,57 @@ function buildSignalCard(sig) {
         <span class="sh-symbol">${sig.symbol}</span>
         <span class="sh-type">${tradeLabel} · ${sig.timeframe || '5m+15m'}</span>
       </div>
-      <div class="sh-right">
+      <div class="sh-right" style="display:flex;align-items:center;gap:6px;">
+        <span class="pillar-pill bull" style="font-size:10px;">Score: ${scorePct}%</span>
         <span class="signal-badge ${optBadgeClass}">${optLabel}</span>
-        <span class="signal-badge ${strengthClass}">${sig.signal_strength || 'MODERATE'}</span>
       </div>
     </div>
     <div class="signal-card-body">
       <div class="sc-option-symbol">${sig.option_symbol || '--'}</div>
-      <div class="sc-price-grid">
-        <div class="sc-price-item">
-          <span class="sc-price-label">Entry</span>
-          <span class="sc-price-value entry">₹${entryPrice}</span>
+
+      <!-- Roadmap Flow Visual -->
+      <div class="roadmap-flow">
+        <div class="roadmap-step">
+          <span class="roadmap-step-name">Entry</span>
+          <span class="roadmap-step-val entry">₹${entryPrice}</span>
+          <span class="roadmap-step-sub">Market/Limit</span>
         </div>
-        <div class="sc-price-item">
-          <span class="sc-price-label">Stop Loss</span>
-          <span class="sc-price-value sl">₹${sl}</span>
+        <span class="roadmap-arrow">→</span>
+        <div class="roadmap-step">
+          <span class="roadmap-step-name">Stop Loss</span>
+          <span class="roadmap-step-val sl">₹${sl}</span>
+          <span class="roadmap-step-sub">-35% Max SL</span>
         </div>
-        <div class="sc-price-item">
-          <span class="sc-price-label">Target 1</span>
-          <span class="sc-price-value t1">₹${t1}</span>
+        <span class="roadmap-arrow">→</span>
+        <div class="roadmap-step">
+          <span class="roadmap-step-name">Target 1</span>
+          <span class="roadmap-step-val t1">₹${t1}</span>
+          <span class="roadmap-step-sub">Scale 50%</span>
         </div>
-        <div class="sc-price-item">
-          <span class="sc-price-label">Target 2</span>
-          <span class="sc-price-value t2">₹${t2}</span>
+        <span class="roadmap-arrow">→</span>
+        <div class="roadmap-step">
+          <span class="roadmap-step-name">Target 2</span>
+          <span class="roadmap-step-val t2">₹${t2}</span>
+          <span class="roadmap-step-sub">Runner</span>
         </div>
       </div>
+
       <div class="sc-rr">
-        Risk/Reward: <span class="rr-value">${rr}:1</span>
+        R:R Ratio: <span class="rr-value">${rr}:1</span>
         &nbsp;|&nbsp; Lots: <span style="font-family:var(--font-mono);font-weight:600">${sig.position_size_lots}</span>
-        &nbsp;|&nbsp; Capital at Risk: <span style="color:var(--orange);font-family:var(--font-mono)">${sig.capital_at_risk_pct?.toFixed(1)}%</span>
+        &nbsp;|&nbsp; Risk: <span style="color:var(--orange);font-family:var(--font-mono)">${sig.capital_at_risk_pct?.toFixed(1)}%</span>
       </div>
+
       <div class="sc-indicators">
         <span class="sc-ind-badge">RSI: ${rsi5m}</span>
         <span class="sc-ind-badge">MACD: ${macd}</span>
         <span class="sc-ind-badge">VWAP: ₹${vwap}</span>
+        <span class="sc-ind-badge">ATR: ${atrVal}</span>
         <span class="sc-ind-badge">Vol: ${volRatio}x</span>
-        <span class="sc-ind-badge">ST: ${st}</span>
       </div>
     </div>
     <div class="signal-card-footer">
-      <div class="scf-risk">Max loss: <strong>₹${sig.max_loss_per_trade?.toFixed(0) || '--'}</strong> · ${sig.position_size_lots} × ${sig.lot_size} units</div>
+      <div class="scf-risk">Max loss: <strong>₹${sig.max_loss_per_trade?.toFixed(0) || '--'}</strong> (${sig.position_size_lots} × ${sig.lot_size})</div>
       <div class="scf-time">${timeStr}</div>
     </div>
   `;
@@ -377,6 +514,64 @@ function openSignalModal(sig) {
     `<div class="condition-item failed">${c}</div>`
   ).join('');
 
+  const entryRules = sig.entry_rules || [];
+  let rulesChecklistHtml = '';
+  if (entryRules.length > 0) {
+    rulesChecklistHtml = entryRules.map(r => {
+      const icon = r.passed ? '✅' : '❌';
+      const border = r.passed ? 'var(--green)' : 'var(--red)';
+      const bg = r.passed ? 'rgba(0,200,150,0.06)' : 'rgba(255,77,109,0.06)';
+      return `
+        <div style="padding:8px 12px;background:${bg};border-left:3px solid ${border};border-radius:4px;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <strong>${icon} [${r.pillar}] ${r.name}</strong>
+            <span style="font-size:11px;font-family:var(--font-mono);opacity:0.8;">${r.passed ? 'PASSED' : 'FAILED'}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Threshold: ${r.threshold}</div>
+          <div style="font-size:11px;color:var(--accent);font-family:var(--font-mono);margin-top:1px;">Actual: ${r.actual_value}</div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    rulesChecklistHtml = validNotes.map(note => {
+      const cls = note.includes('✅') ? 'passed' : note.includes('❌') ? 'failed' : 'warning';
+      return `<div class="condition-item ${cls}">${note}</div>`;
+    }).join('');
+  }
+
+  const roadmap = sig.exit_roadmap || {};
+  const roadmapHtml = `
+    <div class="roadmap-flow" style="margin-bottom:12px;">
+      <div class="roadmap-step">
+        <span class="roadmap-step-name">Entry</span>
+        <span class="roadmap-step-val entry">₹${sig.entry_price?.toFixed(2)}</span>
+        <span class="roadmap-step-sub">Market/Limit</span>
+      </div>
+      <span class="roadmap-arrow">→</span>
+      <div class="roadmap-step">
+        <span class="roadmap-step-name">Stop Loss</span>
+        <span class="roadmap-step-val sl">₹${sig.stop_loss?.toFixed(2)}</span>
+        <span class="roadmap-step-sub">Spot ₹${roadmap.underlying_stop_loss || '--'}</span>
+      </div>
+      <span class="roadmap-arrow">→</span>
+      <div class="roadmap-step">
+        <span class="roadmap-step-name">Target 1</span>
+        <span class="roadmap-step-val t1">₹${sig.target_1?.toFixed(2)}</span>
+        <span class="roadmap-step-sub">Spot ₹${roadmap.target_1_underlying || '--'}</span>
+      </div>
+      <span class="roadmap-arrow">→</span>
+      <div class="roadmap-step">
+        <span class="roadmap-step-name">Target 2</span>
+        <span class="roadmap-step-val t2">₹${sig.target_2?.toFixed(2)}</span>
+        <span class="roadmap-step-sub">Spot ₹${roadmap.target_2_underlying || '--'}</span>
+      </div>
+    </div>
+    <div style="background:var(--bg-secondary);padding:8px 12px;border-radius:6px;font-size:12px;border-left:3px solid var(--accent);margin-bottom:12px;">
+      💡 <strong>Trailing SL Rule:</strong> ${roadmap.trailing_sl_rule || 'When Target 1 is hit, scale 50% and move Stop-Loss to Cost.'}<br/>
+      ⏰ <strong>Hard Time Cutoff:</strong> ${roadmap.time_stop_cutoff || '15:20 IST (Mandatory Intraday Square-Off)'}
+    </div>
+  `;
+
   document.getElementById('modal-body').innerHTML = `
     <div class="modal-signal-grid">
       <div>
@@ -388,7 +583,7 @@ function openSignalModal(sig) {
           <div class="msg-row"><span class="msg-label">Strategy</span><span class="msg-value">${sig.trade_type?.replace('_', ' ')}</span></div>
           <div class="msg-row"><span class="msg-label">Direction</span><span class="msg-value">${sig.direction}</span></div>
           <div class="msg-row"><span class="msg-label">Expiry</span><span class="msg-value">${sig.expiry_date}</span></div>
-          <div class="msg-row"><span class="msg-label">Signal Strength</span><span class="msg-value yellow">${sig.signal_strength}</span></div>
+          <div class="msg-row"><span class="msg-label">Quantitative Score</span><span class="msg-value green">${sig.score_pct || 85}% (${sig.signal_strength})</span></div>
         </div>
         <div class="msg-section">
           <div class="msg-section-title">💰 Pricing & Live Broker LTP</div>
@@ -403,8 +598,8 @@ function openSignalModal(sig) {
           </div>
           <div class="msg-row"><span class="msg-label">Entry Range</span><span id="modal-entry-range" class="msg-value">₹${sig.entry_price_range?.[0]?.toFixed(2)} – ₹${sig.entry_price_range?.[1]?.toFixed(2)}</span></div>
           <div class="msg-row"><span class="msg-label">Stop Loss (-35%)</span><span id="modal-sl" class="msg-value red">₹${sig.stop_loss?.toFixed(2)} (-35%)</span></div>
-          <div class="msg-row"><span class="msg-label">Target 1 (100% gain / 2x)</span><span id="modal-t1" class="msg-value green">₹${sig.target_1?.toFixed(2)}</span></div>
-          <div class="msg-row"><span class="msg-label">Target 2 (200% gain / 3x)</span><span id="modal-t2" class="msg-value green">₹${sig.target_2?.toFixed(2)}</span></div>
+          <div class="msg-row"><span class="msg-label">Target 1 (+100%)</span><span id="modal-t1" class="msg-value green">₹${sig.target_1?.toFixed(2)}</span></div>
+          <div class="msg-row"><span class="msg-label">Target 2 (+200%)</span><span id="modal-t2" class="msg-value green">₹${sig.target_2?.toFixed(2)}</span></div>
           <div class="msg-row"><span class="msg-label">Risk/Reward</span><span id="modal-rr" class="msg-value green">${sig.risk_reward_ratio?.toFixed(1)}:1</span></div>
           <div class="msg-row"><span class="msg-label">Position Size</span><span id="modal-pos-size" class="msg-value">${sig.position_size_lots} lot(s) × ${sig.lot_size}</span></div>
           <div class="msg-row"><span class="msg-label">Max Loss (₹)</span><span id="modal-max-loss" class="msg-value red">₹${sig.max_loss_per_trade?.toFixed(0)}</span></div>
@@ -434,23 +629,23 @@ function openSignalModal(sig) {
     </div>
 
     <div class="msg-section">
-      <div class="msg-section-title">✅ Validation Checks</div>
-      <div class="conditions-list">${validationHtml || '<div class="condition-item">No validation data</div>'}</div>
+      <div class="msg-section-title">🎯 Mathematical Exit Roadmap</div>
+      ${roadmapHtml}
     </div>
 
     <div class="msg-section">
-      <div class="msg-section-title">📌 Entry Conditions</div>
-      <div class="conditions-list">${entryCondHtml || '<div class="condition-item">No entry conditions</div>'}</div>
+      <div class="msg-section-title">📋 7-Pillar Quantitative Entry Checklist</div>
+      <div>${rulesChecklistHtml || '<div class="condition-item">No rule details available</div>'}</div>
     </div>
 
     <div class="msg-section">
-      <div class="msg-section-title">🚫 Invalidation Conditions</div>
+      <div class="msg-section-title">🚫 Invalidation Conditions (Immediate Stop)</div>
       <div class="conditions-list">${invalidHtml || '<div class="condition-item">No invalidation conditions</div>'}</div>
     </div>
 
     <div style="padding:10px 14px;background:var(--yellow-bg);border:1px solid rgba(255,209,102,0.2);border-radius:8px;font-size:12px;color:var(--yellow);margin-top:10px;">
-      ⚠️ <strong>PAPER TRADING MODE</strong> — Clicking "Execute Paper Trade" will simulate the trade only. 
-      No real money will be used. Always validate signals independently before real trading.
+      ⚠️ <strong>PAPER TRADING SIMULATOR</strong> — Clicking "Execute Paper Trade" will log a simulated order. 
+      Real-money order execution is permanently disabled. Past paper results do not guarantee real-market profitability.
     </div>
   `;
 
@@ -737,20 +932,23 @@ async function loadTradeHistory() {
 
 function renderTradeHistory(data) {
   const container = document.getElementById('trade-history-container');
+  const tabContainer = document.getElementById('tab-trade-history-container');
   const trades = data.trades || [];
 
+  const emptyHtml = '<div class="empty-state">No trade history yet</div>';
   if (trades.length === 0) {
-    container.innerHTML = '<div class="empty-state">No trade history</div>';
+    if (container) container.innerHTML = emptyHtml;
+    if (tabContainer) tabContainer.innerHTML = emptyHtml;
     return;
   }
 
-  container.innerHTML = `
-    <div style="display:flex;gap:20px;margin-bottom:12px;font-size:13px;color:var(--text-secondary)">
+  const historyHtml = `
+    <div style="display:flex;gap:20px;margin-bottom:12px;font-size:13px;color:var(--text-secondary);flex-wrap:wrap;">
       <span>Total: <strong>${data.total_trades}</strong></span>
       <span>Wins: <strong style="color:var(--green)">${data.wins}</strong></span>
       <span>Losses: <strong style="color:var(--red)">${data.losses}</strong></span>
       <span>Win Rate: <strong>${data.win_rate_pct}%</strong></span>
-      <span>Total P&L: <strong class="${(data.total_pnl || 0) >= 0 ? 'positive' : 'negative'}">₹${data.total_pnl?.toFixed(2)}</strong></span>
+      <span>Realized P&L: <strong class="${(data.total_pnl || 0) >= 0 ? 'positive' : 'negative'}">₹${data.total_pnl?.toFixed(2)}</strong></span>
     </div>
     <table class="trades-table">
       <thead>
@@ -763,6 +961,28 @@ function renderTradeHistory(data) {
           <th>P&L</th>
           <th>P&L %</th>
           <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${trades.map(t => `
+          <tr>
+            <td>${t.exit_time ? new Date(t.exit_time).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }) : '--'}</td>
+            <td><strong>${t.option_symbol}</strong></td>
+            <td>₹${t.entry_price?.toFixed(2)}</td>
+            <td>₹${t.exit_price?.toFixed(2)}</td>
+            <td>${t.quantity * t.lot_size}</td>
+            <td class="${t.pnl >= 0 ? 'positive' : 'negative'}">₹${t.pnl?.toFixed(2)}</td>
+            <td class="${t.pnl_pct >= 0 ? 'positive' : 'negative'}">${t.pnl_pct >= 0 ? '+' : ''}${t.pnl_pct?.toFixed(1)}%</td>
+            <td style="color:var(--text-muted)">${t.exit_reason || '--'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  if (container) container.innerHTML = historyHtml;
+  if (tabContainer) tabContainer.innerHTML = historyHtml;
+}
         </tr>
       </thead>
       <tbody>

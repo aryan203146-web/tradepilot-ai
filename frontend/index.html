@@ -157,21 +157,92 @@
         <span id="scan-loading" class="loading-spinner hidden"></span>
       </div>
 
-      <!-- Signal Cards -->
-      <section class="signals-section">
+      <!-- Quantitative Matrix Overview Card -->
+      <div class="quant-matrix-card">
+        <div class="quant-matrix-header">
+          <div>
+            <h3 style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px;">
+              <span>⚡ 7-Pillars Quantitative Engine Matrix</span>
+            </h3>
+            <div style="font-size:11px;color:var(--text-muted);">
+              Real-time multi-indicator mathematical filters: RSI (14) · EMA 9/21/50 · VWAP · MACD · ATR (14) · Volume · S/R
+            </div>
+          </div>
+          <button class="btn-sm" onclick="runScan()">⚡ Refresh All</button>
+        </div>
+        <div class="quant-table-wrapper">
+          <table class="quant-table" id="quant-matrix-table">
+            <thead>
+              <tr>
+                <th>Symbol</th>
+                <th>Spot Price</th>
+                <th>RSI (5m)</th>
+                <th>EMA 9 / 21</th>
+                <th>15m Trend</th>
+                <th>VWAP (Bias)</th>
+                <th>MACD Hist</th>
+                <th>ATR (5m)</th>
+                <th>Vol Ratio</th>
+                <th>Strategy Verdict</th>
+              </tr>
+            </thead>
+            <tbody id="quant-matrix-tbody">
+              <tr>
+                <td colspan="10" style="text-align:center;color:var(--text-muted);padding:14px;">
+                  Click "Scan Markets" to evaluate all symbols against the 7 quantitative pillars.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Tab Navigation -->
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-btn-signals" onclick="switchDashboardTab('signals')">
+          <span>🎯 Validated Setups</span>
+          <span class="tab-count" id="tab-count-signals">0</span>
+        </button>
+        <button class="tab-btn" id="tab-btn-rejections" onclick="switchDashboardTab('rejections')">
+          <span>⛔ Capital-Protected Rejections</span>
+          <span class="tab-count" id="tab-count-rejections">0</span>
+        </button>
+        <button class="tab-btn" id="tab-btn-validator" onclick="switchDashboardTab('validator')">
+          <span>🔎 Deep-Rule Auditor</span>
+        </button>
+        <button class="tab-btn" id="tab-btn-history" onclick="switchDashboardTab('history')">
+          <span>📜 Trade Journal</span>
+        </button>
+      </div>
+
+      <!-- Tab 1: Validated Signal Cards -->
+      <section class="signals-section tab-pane" id="pane-signals">
         <div class="section-header">
-          <h2 class="section-title">🎯 Trade Signals</h2>
+          <h2 class="section-title">🎯 Validated Trade Setups</h2>
           <span class="section-subtitle" id="signals-count">No signals yet</span>
         </div>
         <div id="signals-container" class="signals-grid">
           <div class="no-signal-placeholder">
             <div class="nsp-icon">📊</div>
             <div class="nsp-text">Run market scan to generate signals</div>
-            <div class="nsp-sub">Signals appear here after validation</div>
+            <div class="nsp-sub">Signals appear here after passing all quantitative entry rules</div>
           </div>
         </div>
-      <!-- Trade Validation & Verification Inspector -->
-      <section class="validator-section">
+      </section>
+
+      <!-- Tab 2: Rejections & No-Trade Explorer -->
+      <section class="tab-pane hidden" id="pane-rejections">
+        <div class="section-header">
+          <h2 class="section-title">⛔ Capital Protection & Rejection Log</h2>
+          <span class="section-subtitle">Setups refused by the quantitative engine to prevent capital drawdowns</span>
+        </div>
+        <div id="rejections-container">
+          <div class="empty-state">No rejected setups logged yet. Run scan to inspect.</div>
+        </div>
+      </section>
+
+      <!-- Tab 3: Trade Validation & Verification Inspector -->
+      <section class="validator-section tab-pane hidden" id="pane-validator">
         <div class="section-header">
           <h2 class="section-title">🔎 Trade Validation & Verification Inspector</h2>
           <span class="section-subtitle">Audit any symbol's live indicators and rule pass/fail scorecard</span>
@@ -205,6 +276,23 @@
           </div>
         </div>
       </section>
+
+      <!-- Tab 4: Trade Journal / History Pane -->
+      <section class="tab-pane hidden" id="pane-history">
+        <div class="section-header">
+          <h2 class="section-title">📜 Paper Trade Journal & Execution Ledger</h2>
+          <button class="btn-sm" onclick="loadTradeHistory()">Refresh Journal</button>
+        </div>
+        <div id="tab-trade-history-container">
+          <div class="empty-state">No trade history yet</div>
+        </div>
+      </section>
+
+      <!-- Transparency & Risk Disclaimer -->
+      <div class="transparency-banner">
+        <strong>⚖️ Quantitative Integrity & Performance Disclaimer:</strong><br/>
+        TradePilot AI operates strictly as an <em>algorithmic paper-trading & mathematical decision-support system</em>. All entries and exits are calculated using deterministically audited rules across RSI, EMA, VWAP, MACD, ATR, Volume, and Support/Resistance. <strong>No quantitative model guarantees profitability</strong>. Futures & Options trading involves severe financial risk, leverage, and time decay (theta). Real-money order execution is hard-locked off. Never trade with capital you cannot afford to lose.
+      </div>
 
       <!-- Market Data Grid -->
       <section class="market-section">
