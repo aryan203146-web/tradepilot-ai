@@ -905,3 +905,68 @@ body {
 .negative { color: var(--red-bright) !important; }
 .neutral { color: var(--text-secondary) !important; }
 .accent-text { color: var(--accent) !important; }
+
+/* ============================================================
+   Mobile & Tablet Responsiveness (< 900px)
+   ============================================================ */
+@media (max-width: 900px) {
+  .header {
+    flex-direction: column;
+    height: auto;
+    padding: 12px 14px;
+    gap: 10px;
+  }
+  .header-left, .header-center, .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .ticker-strip {
+    position: static;
+  }
+  .main-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .sidebar {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 14px;
+  }
+  .content {
+    padding: 14px 10px;
+  }
+  .tab-bar {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .tab-btn {
+    white-space: nowrap;
+    font-size: 12px;
+    padding: 7px 12px;
+  }
+  .signals-grid {
+    grid-template-columns: 1fr;
+  }
+  .modal-box {
+    width: 95vw;
+    max-height: 92vh;
+    padding: 14px;
+  }
+  .modal-signal-grid {
+    grid-template-columns: 1fr;
+  }
+  .roadmap-flow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .roadmap-arrow {
+    display: none;
+  }
+  .roadmap-step {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
