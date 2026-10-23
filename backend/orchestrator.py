@@ -39,7 +39,8 @@ class SignalOrchestrator:
         self.daily_trades_count = daily_trades_count
         self._cache: Dict[str, dict] = {}
         self._cache_time: Dict[str, datetime] = {}
-        self._cache_ttl_seconds = 60  # Refresh every 60 seconds
+        # Keep live LTPs responsive when the dashboard is set to auto-refresh.
+        self._cache_ttl_seconds = 5
 
     def _is_cache_valid(self, key: str) -> bool:
         if key not in self._cache_time:
@@ -136,6 +137,8 @@ class SignalOrchestrator:
             'spot_price': spot_price,
             'lot_size': lot_size,
             'strike_gap': strike_gap,
+            'price_source': market_data.get('price_source', 'Unknown'),
+            'price_updated_at': market_data.get('price_updated_at', ''),
             'indicators': indicators,
             'options_chain_summary': {
                 'pcr': options_chain.get('pcr'),

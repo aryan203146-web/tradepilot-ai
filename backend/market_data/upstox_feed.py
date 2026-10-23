@@ -32,13 +32,16 @@ UPSTOX_INSTRUMENT_MAP = {
 class UpstoxClientManager:
     """
     Manages connection to Upstox API v2.
-    Retrieves real live exchange LTP and complete option chain.
+    Retrieves live exchange LTP snapshots and complete option chain.
     """
 
     def __init__(self):
         self.access_token: Optional[str] = None
         self.is_connected: bool = False
+        # The v2 LTP endpoint is deprecated. Option-chain endpoints remain v2,
+        # while current LTP snapshots are served by Market Quote v3.
         self.base_url = "https://api.upstox.com/v2"
+        self.quote_base_url = "https://api.upstox.com/v3"
         self._load_saved_credentials()
 
     def _load_saved_credentials(self):
@@ -74,7 +77,7 @@ class UpstoxClientManager:
 
         try:
             # Test connection by requesting Nifty 50 & Bank Nifty LTP
-            test_url = f"{self.base_url}/market-quote/ltp?instrument_key=NSE_INDEX|Nifty 50,NSE_INDEX|Nifty Bank"
+            test_url = f"{self.quote_base_url}/market-quote/ltp?instrument_key=NSE_INDEX|Nifty 50,NSE_INDEX|Nifty Bank"
             resp = requests.get(test_url, headers=headers, timeout=8)
 
             if resp.status_code == 200 and resp.json().get("status") == "success":
@@ -101,7 +104,7 @@ class UpstoxClientManager:
 
         keys = [UPSTOX_INSTRUMENT_MAP.get(s, s) for s in symbols]
         query_keys = ",".join(keys)
-        url = f"{self.base_url}/market-quote/ltp?instrument_key={query_keys}"
+        url = f"{self.quote_base_url}/market-quote/ltp?instrument_key={query_keys}"
 
         headers = {
             "Accept": "application/json",
@@ -115,7 +118,18 @@ class UpstoxClientManager:
                 data = resp.json().get("data", {})
                 reverse_map = {v: k for k, v in UPSTOX_INSTRUMENT_MAP.items()}
                 for key_id, info in data.items():
-                    sym_name = reverse_map.get(key_id, key_id.split("|")[-1])
+                    # Upstox returns a display key such as ``NSE_INDEX:Nifty 50``
+                    # but supplies the requested pipe-delimited token separately.
+                    # Map with instrument_token first so live quotes are assigned to
+                    # our internal symbols instead of silently falling back to Yahoo.
+                    instrument_token = info.get("instrument_token", "")
+                    normalized_key = key_id.replace(":", "|", 1)
+                    sym_name = (
+                        reverse_map.get(instrument_token)
+                        or reverse_map.get(normalized_key)
+                        or reverse_map.get(key_id)
+                        or key_id.split(":", 1)[-1]
+                    )
                     result[sym_name] = float(info.get("last_price", 0.0))
                 return result
         except Exception as e:
@@ -230,8 +244,8 @@ class UpstoxClientManager:
         return {
             "is_connected": self.is_connected,
             "has_token": bool(self.access_token),
-            "broker": "Upstox API v2",
-            "mode": "UPSTOX LIVE EXCHANGE FEED" if self.is_connected else "SIMULATED / PAPER TRADING",
+            "broker": "Upstox API (Market Quote v3)",
+            "mode": "UPSTOX LIVE QUOTE POLLING" if self.is_connected else "SIMULATED / PAPER TRADING",
         }
 
 

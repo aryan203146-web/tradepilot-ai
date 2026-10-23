@@ -5,16 +5,37 @@ Validates scan pipeline, risk summary, portfolio, and trade endpoints.
 import sys
 import os
 import pytest
+from unittest.mock import Mock, patch
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 from main import app
+from market_data.upstox_feed import UpstoxClientManager
 
 client = TestClient(app)
 
 
 class TestAPIEndpoints:
+    def test_upstox_ltp_maps_response_display_key_to_internal_symbol(self):
+        """Upstox response keys use ':'; prefer instrument_token for symbol mapping."""
+        manager = UpstoxClientManager()
+        manager.is_connected = True
+        manager.access_token = "test-token"
+        response = Mock()
+        response.status_code = 200
+        response.json.return_value = {
+            "status": "success",
+            "data": {
+                "NSE_INDEX:Nifty 50": {
+                    "instrument_token": "NSE_INDEX|Nifty 50",
+                    "last_price": 25001.25,
+                }
+            },
+        }
+        with patch("market_data.upstox_feed.requests.get", return_value=response):
+            assert manager.get_live_ltp(["NIFTY"]) == {"NIFTY": 25001.25}
+
     def test_config_endpoint(self):
         resp = client.get("/api/config")
         assert resp.status_code == 200

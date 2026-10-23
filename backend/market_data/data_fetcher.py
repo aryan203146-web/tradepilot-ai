@@ -34,7 +34,7 @@ def _generate_simulated_ohlcv(symbol: str, interval: str, periods: int = 100) ->
         import pytz
         IST = pytz.timezone("Asia/Kolkata")
     except ImportError:
-        from datetime import timezone, timedelta
+        from datetime import timezone
         IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST)
 
@@ -153,6 +153,7 @@ def fetch_market_data(symbol: str) -> Dict:
     df_15m = fetch_ohlcv(yf_sym, '15m', lookback_days=10)
 
     spot_price = None
+    price_source = "Yahoo Finance"
     if df_5m is not None and len(df_5m) > 0:
         spot_price = float(df_5m['Close'].iloc[-1])
 
@@ -163,6 +164,7 @@ def fetch_market_data(symbol: str) -> Dict:
             live_quotes = upstox_manager.get_live_ltp([symbol])
             if symbol in live_quotes and live_quotes[symbol] > 0:
                 spot_price = live_quotes[symbol]
+                price_source = "Upstox live LTP"
                 logger.info(f"Using live Upstox LTP for {symbol}: ₹{spot_price}")
     except Exception as e:
         logger.debug(f"Upstox LTP lookup bypassed: {e}")
@@ -175,6 +177,8 @@ def fetch_market_data(symbol: str) -> Dict:
         'spot_price': spot_price,
         'lot_size': config.get('lot_size', 1),
         'strike_gap': config.get('strike_gap', 50),
+        'price_source': price_source,
+        'price_updated_at': datetime.now().isoformat(),
         'fetched_at': datetime.now().isoformat(),
     }
 

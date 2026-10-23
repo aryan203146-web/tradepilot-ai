@@ -815,6 +815,10 @@ function renderMarketData(marketData) {
     const pcr = data.options_chain_summary?.pcr?.toFixed(2) || '--';
     const ivPct = data.options_chain_summary?.iv_percentile?.toFixed(0) || '--';
     const price = data.spot_price?.toFixed(2) || '--';
+    const priceSource = data.price_source || 'Unknown source';
+    const updatedAt = data.price_updated_at
+      ? new Date(data.price_updated_at).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' })
+      : '--';
 
     const card = document.createElement('div');
     card.className = 'market-card';
@@ -830,6 +834,7 @@ function renderMarketData(marketData) {
         <div class="mc-ind"><span class="mc-ind-label">IV %ile</span><span class="mc-ind-value">${ivPct}%</span></div>
       </div>
       <div class="mc-trend ${trendClass}">${trend}</div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-muted);">${priceSource} · updated ${updatedAt} IST</div>
     `;
     grid.appendChild(card);
   });
@@ -1188,7 +1193,7 @@ async function checkUpstoxStatus() {
         badge.style.background = 'rgba(88,101,242,0.25)';
         badge.style.color = '#7289da';
         badge.style.borderColor = '#7289da';
-        badge.title = 'Upstox v2 API Active — Streaming 100% Real Live Market Quotes';
+        badge.title = 'Upstox Market Quote v3 active — live LTP refreshed by the selected scan interval';
       } else {
         badge.innerHTML = '⚡ Connect Upstox API';
         badge.style.background = 'rgba(88,101,242,0.15)';
@@ -1232,7 +1237,7 @@ async function saveUpstoxCredentials() {
       msgEl.style.background = 'rgba(0,200,150,0.15)';
       msgEl.style.color = 'var(--green)';
       msgEl.textContent = '✅ Connected to Upstox API v2 successfully!';
-      showSuccess('Upstox API connected! Real live market quotes and option chains active.');
+      showSuccess('Upstox API connected! Live LTP snapshots and option chains are active.');
       await checkUpstoxStatus();
       setTimeout(closeUpstoxModal, 1500);
       runScan();
