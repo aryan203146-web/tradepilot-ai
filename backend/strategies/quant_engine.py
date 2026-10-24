@@ -552,10 +552,11 @@ class QuantitativeStrategyEngine:
         risk_free_rate: float = 0.065,
     ) -> ExitRoadmap:
         """
-        Build dynamic quantitative exit roadmap:
-        - Underlying Stop-Loss at 1.5x ATR
-        - Underlying Target 1 at 3.0x ATR (Scale 50%, Trail Stop to Cost)
-        - Underlying Target 2 at 4.5x ATR (Runner)
+        Build a structural, ATR-aware exit roadmap:
+        - Stop at the closer of the latest 5m structure or one ATR, while
+          refusing a stop tighter than half an ATR of ordinary market noise.
+        - Target 1 at 1.5R (Scale 50%, Trail Stop to Cost)
+        - Target 2 at 2.5R (Runner)
         - Option premiums re-priced via Black-Scholes with backed-out IV
         - Hard stop cap at -35%
         - Real R:R calculated from actual option prices
@@ -564,15 +565,25 @@ class QuantitativeStrategyEngine:
         atr_5m = indicators.get("atr_5m", spot_price * 0.005)
         safe_atr = max(atr_5m, 0.001)
 
-        # 1. Underlying spot levels in ATR multiples
+        # 1. Use 5m structure with an ATR floor. This avoids arbitrary premium
+        # percentages and makes the invalidation level visible on the underlying.
+        min_stop_distance = 0.5 * safe_atr
         if is_long:
-            underlying_sl = round(spot_price - (1.5 * safe_atr), 2)
-            underlying_t1 = round(spot_price + (3.0 * safe_atr), 2)
-            underlying_t2 = round(spot_price + (4.5 * safe_atr), 2)
+            atr_stop = spot_price - safe_atr
+            structural_stop = indicators.get("support_5m", atr_stop)
+            candidate_stop = max(atr_stop, structural_stop)
+            underlying_sl = round(min(candidate_stop, spot_price - min_stop_distance), 2)
+            risk_points = spot_price - underlying_sl
+            underlying_t1 = round(spot_price + (1.5 * risk_points), 2)
+            underlying_t2 = round(spot_price + (2.5 * risk_points), 2)
         else:
-            underlying_sl = round(spot_price + (1.5 * safe_atr), 2)
-            underlying_t1 = round(spot_price - (3.0 * safe_atr), 2)
-            underlying_t2 = round(spot_price - (4.5 * safe_atr), 2)
+            atr_stop = spot_price + safe_atr
+            structural_stop = indicators.get("resistance_5m", atr_stop)
+            candidate_stop = min(atr_stop, structural_stop)
+            underlying_sl = round(max(candidate_stop, spot_price + min_stop_distance), 2)
+            risk_points = underlying_sl - spot_price
+            underlying_t1 = round(spot_price - (1.5 * risk_points), 2)
+            underlying_t2 = round(spot_price - (2.5 * risk_points), 2)
 
         # 2. Black-Scholes parameter extraction
         K = strike_price if (strike_price and strike_price > 0) else spot_price
@@ -587,7 +598,7 @@ class QuantitativeStrategyEngine:
         target_1_premium = round(_black_scholes_price(underlying_t1, K, T, risk_free_rate, iv, is_long), 2)
         target_2_premium = round(_black_scholes_price(underlying_t2, K, T, risk_free_rate, iv, is_long), 2)
 
-        # 3. Hard cap stop-loss: maximum -35% loss
+        # 3. Hard cap stop-loss: maximum configured premium loss.
         max_allowed_loss_premium = round(entry_premium * (1.0 - sl_pct / 100.0), 2)
         stop_premium = max(max_allowed_loss_premium, raw_stop_premium)
         stop_premium = round(min(entry_premium * 0.98, max(0.05, stop_premium)), 2)

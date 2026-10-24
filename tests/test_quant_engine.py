@@ -171,9 +171,7 @@ class TestQuantEngineRejections:
 class TestExitRoadmapAndPositionEvaluation:
     def test_dynamic_bs_exit_roadmap(self, sample_bullish_indicators):
         """
-        Verify dynamic Black-Scholes ATR-based exit levels.
-        For a Nifty ATM Call at 25,000 (premium ₹150, 3 DTE, ATR 20):
-        SL is around ~10% loss, T1 is around ~22% gain, T2 is around ~34% gain.
+        Verify structural/ATR exit levels with 1.5R and 2.5R targets.
         """
         engine = QuantitativeStrategyEngine()
         ind = sample_bullish_indicators.copy()
@@ -193,6 +191,11 @@ class TestExitRoadmapAndPositionEvaluation:
         assert roadmap.target_2_premium > roadmap.target_1_premium
         assert roadmap.risk_reward_ratio >= 1.5
         assert "Cost" in roadmap.trailing_sl_rule
+        # The supplied support is below the one-ATR stop, so ATR defines risk:
+        # 25,000 - 20 = 24,980; T1 = 25,030 and T2 = 25,050.
+        assert roadmap.underlying_stop_loss == 24980.0
+        assert roadmap.target_1_underlying == 25030.0
+        assert roadmap.target_2_underlying == 25050.0
 
         # R:R check passes
         assert engine.check_exit_roadmap_rr(roadmap, min_rr=1.5) is None

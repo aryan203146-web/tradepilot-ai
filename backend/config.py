@@ -62,9 +62,9 @@ FO_STOCKS = {
 
 # Options Buying Rules
 OPTIONS_BUYING_CONFIG = {
-    "max_sl_pct": 35.0,          # Max stop-loss as % of premium
-    "min_rr_ratio": 2.0,         # Minimum Risk:Reward ratio
-    "max_capital_risk_pct": 2.0,  # Max % of capital to risk per trade
+    "max_sl_pct": 25.0,          # Hard maximum option-premium loss
+    "min_rr_ratio": 1.5,         # Minimum reward:risk to Target 1
+    "max_capital_risk_pct": 0.5, # Max % of capital to risk per paper trade
     "max_delta": 0.55,           # Max delta (avoid deep ITM)
     "min_delta": 0.25,           # Min delta (avoid very far OTM)
     "min_dte": 1,                # Minimum days to expiry
@@ -99,8 +99,8 @@ OPTIONS_SELLING_CONFIG = {
 RISK_CONFIG = {
     "max_trades_per_day": 4,       # Max 3-4 trades per day
     "max_total_capital_risk": 5.0, # Max 5% of capital at risk at any time
-    "max_daily_loss_pct": 3.0,    # Stop trading if daily loss exceeds 3%
-    "max_single_trade_risk": 2.0, # Max 2% risk per trade
+    "max_daily_loss_pct": 1.5,    # Stop trading if daily loss exceeds 1.5%
+    "max_single_trade_risk": 0.5, # Max 0.5% risk per trade
     "paper_trading_capital": 500000.0,  # ₹5 lakh starting capital
     "real_trading_enabled": False,   # DISABLED - Paper trading only
     "square_off_time": "15:20",    # Force square-off at this time

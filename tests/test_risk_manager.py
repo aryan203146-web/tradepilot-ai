@@ -36,19 +36,19 @@ class TestRiskManager:
         assert "limit reached" in reason.lower()
 
     def test_buying_position_sizing(self):
-        """Risk per trade capped at 2% of capital (₹10,000 max risk)."""
+        """Risk per trade capped at 0.5% of capital (₹2,500 max risk)."""
         rm = RiskManager(capital=500000.0)
         # NIFTY lot size 25, premium 200, 35% SL = loss 70 per qty = 1750 per lot
-        # Max risk ₹10,000 / ₹1,750 = 5 lots
+        # Max risk ₹2,500 / ₹1,750 = 1 lot
         lots, at_risk, risk_pct = rm.calculate_buying_position_size(
             capital=500000.0,
             premium=200.0,
             lot_size=25,
             sl_pct=35.0
         )
-        assert lots == 5
-        assert at_risk == 5 * (200.0 * 25 * 0.35)
-        assert risk_pct <= 2.0
+        assert lots == 1
+        assert at_risk == 1 * (200.0 * 25 * 0.35)
+        assert risk_pct <= 0.5
 
     def test_stop_loss_hit_detection(self):
         rm = RiskManager()
